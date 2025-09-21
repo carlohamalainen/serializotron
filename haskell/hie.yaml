@@ -1,0 +1,9 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:serializotron"
+    - path: "test"
+      component: "test:serializotron-test"
+    - path: "app"
+      component: "exe:generate-samples"
+

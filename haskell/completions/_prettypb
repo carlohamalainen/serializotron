@@ -1,0 +1,6 @@
+#compdef prettypb prettypb.sh ./prettypb.sh
+
+_arguments \
+  '(-h)-h[show help]' \
+  '-m[output mode]:mode:(plain bat "bat-color")' \
+  '*:file:_files'

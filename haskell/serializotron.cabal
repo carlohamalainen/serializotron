@@ -1,0 +1,160 @@
+cabal-version:      3.4
+
+name:               serializotron
+
+version:            0.1.0.0
+
+synopsis:           Serialization library with type metadata and deduplication.
+
+homepage:           https://github.com/carlohamalainen/serializotron
+
+license:            MIT
+
+author:             Carlo Hamalainen
+
+maintainer:         carlo@carlo-hamalainen.net
+
+category:           Serialization
+
+build-type:         Custom
+
+extra-doc-files:    CHANGELOG.md
+
+extra-source-files: proto/serializotron.proto
+
+tested-with: GHC == 9.6.7
+
+custom-setup
+  setup-depends:
+    base,
+    Cabal,
+    proto-lens-setup
+
+common warnings
+    ghc-options:
+     -Weverything
+     -Wno-all-missed-specialisations
+     -Wno-implicit-prelude
+     -Wno-missing-export-lists
+     -Wno-missing-import-lists
+     -Wno-missing-kind-signatures
+     -Wno-missing-local-signatures
+     -Wno-missing-safe-haskell-mode
+     -Wno-monomorphism-restriction
+     -Wno-name-shadowing
+     -Wno-prepositive-qualified-module
+     -Wno-unsafe
+     -Wno-unused-imports
+
+common common
+    ghc-options: -j4
+
+    default-language: GHC2021
+
+    default-extensions:
+        , DeriveAnyClass
+        , DeriveGeneric
+        , DerivingStrategies
+        , DuplicateRecordFields
+        , OverloadedRecordDot
+        , OverloadedStrings
+        , PatternSynonyms
+        , StrictData
+        , UnboxedTuples
+
+library
+    import:           warnings, common
+
+    exposed-modules:
+                      Serializotron
+                      Serializotron.Examples
+                      Serializotron.InspiredExamples
+                      Serializotron.Instances
+                      Proto.Serializotron
+                      Proto.Serializotron_Fields
+
+    build-depends:    base ^>= 4.18.3.0,
+                      aeson,
+                      bytestring,
+                      containers,
+                      cryptonite,
+                      hashable,
+                      hashable,
+                      lens,
+                      lens-family,
+                      memory,
+                      mtl,
+                      process,
+                      proto-lens,
+                      proto-lens-runtime,
+                      text,
+                      zlib,
+                      text-display,
+                      time,
+                      unordered-containers,
+                      vector,
+
+    hs-source-dirs:   src
+
+test-suite serializotron-test
+    import:           warnings, common
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        bytestring,
+        containers,
+        filepath,
+        hashable,
+        hedgehog,
+        lens,
+        serializotron,
+        tasty,
+        tasty-hedgehog,
+        tasty-hunit,
+        temporary,
+        text,
+        time,
+        unordered-containers,
+        vector
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
+    other-modules:
+                      Test.Serializotron.Properties,
+                      Test.Serializotron.Units,
+                      Test.Serializotron.InspiredExamples,
+                      Test.Serializotron.RoundTripTests,
+                      Test.Serializotron.TypeInfoTests
+
+executable szt
+    import:           warnings, common
+    hs-source-dirs:   app
+    main-is:          Szt.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        bytestring,
+        serializotron,
+        text,
+        process,
+        zlib,
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+executable generate-samples
+    import:           warnings, common
+    hs-source-dirs:   app
+    main-is:          GenerateSamples.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        aeson,
+        bytestring,
+        serializotron,
+        directory,
+        filepath,
+        text,
+        time,
+        containers,
+        unordered-containers,
+        vector,
+        hashable,
+        process,
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
