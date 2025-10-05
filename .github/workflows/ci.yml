@@ -43,6 +43,9 @@ jobs:
       working-directory: haskell
       run: cabal update
 
+    - name: Install proto-lens-protoc
+      run: cabal install proto-lens-protoc --install-method=copy --overwrite-policy=always
+
     - name: Build dependencies
       working-directory: haskell
       run: cabal build --only-dependencies --enable-tests
