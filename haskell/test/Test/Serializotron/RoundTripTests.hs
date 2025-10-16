@@ -21,6 +21,7 @@ module Test.Serializotron.RoundTripTests where
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
+import Control.Monad.IO.Class (liftIO)
 
 -- Standard library imports
 import Data.Text (Text)
@@ -259,6 +260,25 @@ testRoundTrip gen = property $ do
       failure
     Right decoded -> value === decoded
 
+-- | Generic round-trip test helper for SHALLOW serialization
+-- Uses temporary files to test full shallow serialization path
+testRoundTripShallow :: (ToSZT a, FromSZT a, Eq a, Show a) => String -> Gen a -> Property
+testRoundTripShallow testName gen = property $ do
+  value <- forAll gen
+
+  -- Use IO to save and load with shallow serialization
+  -- Use unique temp file per test to avoid file locking issues
+  result <- liftIO $ do
+    let tmpPath = "/tmp/serializotron-test-shallow-" ++ testName ++ ".szt"
+    saveSztShallow tmpPath value
+    loadSzt tmpPath
+
+  case result of
+    Left err -> do
+      annotate $ "Failed to decode (shallow): " ++ show err
+      failure
+    Right decoded -> value === decoded
+
 -- | Round-trip test with custom equality (for floating point)
 testRoundTripApprox :: (ToSZT a, FromSZT a, Show a) => Gen a -> (a -> a -> Bool) -> Property
 testRoundTripApprox gen approxEq = property $ do
@@ -433,3 +453,25 @@ prop_roundtrip_list_maybe = testRoundTrip (genList (genMaybe genInt))
 
 prop_roundtrip_map_of_lists :: Property
 prop_roundtrip_map_of_lists = testRoundTrip (genMap genText (genList genInt))
+
+--------------------------------------------------------------------------------
+-- Shallow Serialization Tests
+--------------------------------------------------------------------------------
+
+-- | Test shallow serialization with a specific list of Text tuples
+-- This test reproduces a bug where items at positions 2+ are incorrectly
+-- deserialized as copies of earlier items
+prop_roundtrip_shallow_text_tuple_list :: Property
+prop_roundtrip_shallow_text_tuple_list = testRoundTripShallow "text_tuple_list" genTextTupleList4
+  where
+    genTextTupleList4 :: Gen [(Text, Text)]
+    genTextTupleList4 = pure
+      [ ("a", "b")
+      , ("c", "c")
+      , ("c", "a")
+      , ("a", "a")
+      ]
+
+-- | Property test for random lists of Text tuples with shallow serialization
+prop_roundtrip_shallow_list_text_tuples :: Property
+prop_roundtrip_shallow_list_text_tuples = testRoundTripShallow "list_text_tuples" (genList (genPair genText genText))

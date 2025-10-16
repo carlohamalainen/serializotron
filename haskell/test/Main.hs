@@ -16,6 +16,7 @@ import Test.Serializotron.Units
 import Test.Serializotron.InspiredExamples
 import Test.Serializotron.RoundTripTests
 import Test.Serializotron.TypeInfoTests
+import Test.Serializotron.ShallowExampleTests
 
 main :: IO ()
 main = defaultMain tests
@@ -27,6 +28,7 @@ tests = testGroup "Serializotron Tests"
   , roundTripTests
   , inspiredExamplesTests
   , typeInfoTests
+  , shallowExampleTests
   ]
 
 -- Convert unit tests to Tasty format
@@ -119,6 +121,9 @@ roundTripTests = testGroup "Comprehensive Round-Trip Tests"
   , testProperty "maybe_list" prop_roundtrip_maybe_list
   , testProperty "list_maybe" prop_roundtrip_list_maybe
   , testProperty "map_of_lists" prop_roundtrip_map_of_lists
+  -- Shallow serialization tests
+  , testProperty "shallow_text_tuple_list" prop_roundtrip_shallow_text_tuple_list
+  , testProperty "shallow_list_text_tuples" prop_roundtrip_shallow_list_text_tuples
   ]
 
 -- TypeInfo extraction tests

@@ -63,6 +63,7 @@ library
                       Serializotron
                       Serializotron.Examples
                       Serializotron.InspiredExamples
+                      Serializotron.ShallowExample
                       Serializotron.Instances
                       Proto.Serializotron
                       Proto.Serializotron_Fields
@@ -99,6 +100,7 @@ test-suite serializotron-test
         base ^>= 4.18.3.0,
         bytestring,
         containers,
+        directory,
         filepath,
         hashable,
         hedgehog,
@@ -118,7 +120,8 @@ test-suite serializotron-test
                       Test.Serializotron.Units,
                       Test.Serializotron.InspiredExamples,
                       Test.Serializotron.RoundTripTests,
-                      Test.Serializotron.TypeInfoTests
+                      Test.Serializotron.TypeInfoTests,
+                      Test.Serializotron.ShallowExampleTests
 
 executable szt
     import:           warnings, common

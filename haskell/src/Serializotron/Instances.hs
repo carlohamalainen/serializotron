@@ -50,10 +50,11 @@ instance ToSZT () where
         , _tiStructure = Just TSUnit
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
 
 instance FromSZT () where
-  fromSzt (DynamicValue DUnit _ _) = Right ()
+  fromSzt (DynamicValue DUnit _ _ _) = Right ()
   fromSzt _ = Left (StructuralMismatch "Expected unit type")
 
 --------------------------------------------------------------------------------
@@ -91,10 +92,11 @@ instance ToSZT Int32 where
         , _tiStructure = Just (TSPrimitive PTInt32)
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
 
 instance FromSZT Int32 where
-  fromSzt (DynamicValue (DPrimitive (PInt32 x)) _ _) = Right x
+  fromSzt (DynamicValue (DPrimitive (PInt32 x)) _ _ _) = Right x
   fromSzt _ = Left (PrimitiveMismatch "Int32" "other")
 
 instance ToSZT Int64 where
@@ -137,10 +139,11 @@ instance ToSZT Word32 where
         , _tiStructure = Just (TSPrimitive PTWord32)
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
 
 instance FromSZT Word32 where
-  fromSzt (DynamicValue (DPrimitive (PWord32 x)) _ _) = Right x
+  fromSzt (DynamicValue (DPrimitive (PWord32 x)) _ _ _) = Right x
   fromSzt _ = Left (PrimitiveMismatch "Word32" "other")
 
 instance ToSZT Word64 where
@@ -154,10 +157,11 @@ instance ToSZT Word64 where
         , _tiStructure = Just (TSPrimitive PTWord64)
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
 
 instance FromSZT Word64 where
-  fromSzt (DynamicValue (DPrimitive (PWord64 x)) _ _) = Right x
+  fromSzt (DynamicValue (DPrimitive (PWord64 x)) _ _ _) = Right x
   fromSzt _ = Left (PrimitiveMismatch "Word64" "other")
 
 -- Integer and Natural
@@ -172,10 +176,11 @@ instance ToSZT Integer where
         , _tiStructure = Just (TSPrimitive PTInteger)
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
 
 instance FromSZT Integer where
-  fromSzt (DynamicValue (DPrimitive (PInteger t)) _ _) = 
+  fromSzt (DynamicValue (DPrimitive (PInteger t)) _ _ _) = 
     case reads (Text.unpack t) of
       [(n, "")] -> Right n
       _ -> Left (StructuralMismatch "Invalid Integer format")
@@ -353,7 +358,7 @@ instance FromSZT a => FromSZT (Vector.Vector a) where
 -- Maybe
 instance (ToSZT a) => ToSZT (Maybe a) where
   toSzt Nothing = DynamicValue 
-    { _dvCore = DSum 0 (DynamicValue DUnit Nothing currentSchemaVersion)
+    { _dvCore = DSum 0 (DynamicValue DUnit Nothing currentSchemaVersion Nothing)
     , _dvTypeInfo = Just $ TypeInfo 
         { _tiTypeName = Just "Maybe"
         , _tiModule = Just "GHC.Maybe"
@@ -362,6 +367,7 @@ instance (ToSZT a) => ToSZT (Maybe a) where
         , _tiStructure = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
   toSzt (Just x) = DynamicValue 
     { _dvCore = DSum 1 (toSzt x)
@@ -373,11 +379,12 @@ instance (ToSZT a) => ToSZT (Maybe a) where
         , _tiStructure = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
 
 instance FromSZT a => FromSZT (Maybe a) where
-  fromSzt (DynamicValue (DSum 0 _) _ _) = Right Nothing
-  fromSzt (DynamicValue (DSum 1 v) _ _) = Just <$> fromSzt v
+  fromSzt (DynamicValue (DSum 0 _) _ _ _) = Right Nothing
+  fromSzt (DynamicValue (DSum 1 v) _ _ _) = Just <$> fromSzt v
   fromSzt _ = Left (StructuralMismatch "Invalid Maybe structure")
 
 -- Either
@@ -392,6 +399,7 @@ instance (ToSZT a, ToSZT b) => ToSZT (Either a b) where
         , _tiStructure = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
   toSzt (Right y) = DynamicValue 
     { _dvCore = DSum 1 (toSzt y)
@@ -403,10 +411,11 @@ instance (ToSZT a, ToSZT b) => ToSZT (Either a b) where
         , _tiStructure = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
+    , _dvShallowId = Nothing
     }
 
 instance (FromSZT a, FromSZT b) => FromSZT (Either a b) where
-  fromSzt (DynamicValue (DSum 0 v) _ _) = Left  <$> fromSzt v
-  fromSzt (DynamicValue (DSum 1 v) _ _) = Right <$> fromSzt v
+  fromSzt (DynamicValue (DSum 0 v) _ _ _) = Left  <$> fromSzt v
+  fromSzt (DynamicValue (DSum 1 v) _ _ _) = Right <$> fromSzt v
   fromSzt _ = Left (StructuralMismatch "Invalid Either structure")
 
