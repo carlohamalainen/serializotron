@@ -16,19 +16,13 @@ maintainer:         carlo@carlo-hamalainen.net
 
 category:           Serialization
 
-build-type:         Custom
+build-type:         Simple
 
 extra-doc-files:    CHANGELOG.md
 
 extra-source-files: proto/serializotron.proto
 
 tested-with: GHC == 9.6.7
-
-custom-setup
-  setup-depends:
-    base,
-    Cabal,
-    proto-lens-setup
 
 common warnings
     ghc-options:
