@@ -40,14 +40,15 @@ import Numeric.Natural (Natural)
 --------------------------------------------------------------------------------
 
 instance ToSZT () where
-  toSzt () = DynamicValue 
+  toSzt () = DynamicValue
     { _dvCore = DUnit
-    , _dvTypeInfo = Just $ TypeInfo 
+    , _dvTypeInfo = Just $ TypeInfo
         { _tiTypeName = Just "()"
         , _tiModule = Just "GHC.Tuple"
         , _tiConstructors = ["()"]
         , _tiFieldLabels = []
         , _tiStructure = Just TSUnit
+        , _tiTypeParameters = []
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -82,14 +83,15 @@ instance FromSZT Int16 where
       else Left (StructuralMismatch "Int16 out of range")
 
 instance ToSZT Int32 where
-  toSzt x = DynamicValue 
+  toSzt x = DynamicValue
     { _dvCore = DPrimitive (PInt32 x)
-    , _dvTypeInfo = Just $ TypeInfo 
+    , _dvTypeInfo = Just $ TypeInfo
         { _tiTypeName = Just "Int32"
         , _tiModule = Just "GHC.Int"
         , _tiConstructors = []
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTInt32)
+        , _tiTypeParameters = []
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -129,14 +131,15 @@ instance FromSZT Word16 where
       else Left (StructuralMismatch "Word16 out of range")
 
 instance ToSZT Word32 where
-  toSzt x = DynamicValue 
+  toSzt x = DynamicValue
     { _dvCore = DPrimitive (PWord32 x)
-    , _dvTypeInfo = Just $ TypeInfo 
+    , _dvTypeInfo = Just $ TypeInfo
         { _tiTypeName = Just "Word32"
         , _tiModule = Just "GHC.Word"
         , _tiConstructors = []
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTWord32)
+        , _tiTypeParameters = []
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -147,14 +150,15 @@ instance FromSZT Word32 where
   fromSzt _ = Left (PrimitiveMismatch "Word32" "other")
 
 instance ToSZT Word64 where
-  toSzt x = DynamicValue 
+  toSzt x = DynamicValue
     { _dvCore = DPrimitive (PWord64 x)
-    , _dvTypeInfo = Just $ TypeInfo 
+    , _dvTypeInfo = Just $ TypeInfo
         { _tiTypeName = Just "Word64"
         , _tiModule = Just "GHC.Word"
         , _tiConstructors = []
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTWord64)
+        , _tiTypeParameters = []
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -166,14 +170,15 @@ instance FromSZT Word64 where
 
 -- Integer and Natural
 instance ToSZT Integer where
-  toSzt x = DynamicValue 
+  toSzt x = DynamicValue
     { _dvCore = DPrimitive (PInteger (Text.pack (show x)))
-    , _dvTypeInfo = Just $ TypeInfo 
+    , _dvTypeInfo = Just $ TypeInfo
         { _tiTypeName = Just "Integer"
         , _tiModule = Just "GHC.Integer"
         , _tiConstructors = []
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTInteger)
+        , _tiTypeParameters = []
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -356,28 +361,12 @@ instance FromSZT a => FromSZT (Vector.Vector a) where
 --------------------------------------------------------------------------------
 
 -- Maybe
-instance (ToSZT a) => ToSZT (Maybe a) where
-  toSzt Nothing = DynamicValue 
-    { _dvCore = DSum 0 (DynamicValue DUnit Nothing currentSchemaVersion Nothing)
-    , _dvTypeInfo = Just $ TypeInfo 
-        { _tiTypeName = Just "Maybe"
-        , _tiModule = Just "GHC.Maybe"
-        , _tiConstructors = ["Nothing", "Just"]
-        , _tiFieldLabels = []
-        , _tiStructure = Nothing
-        }
-    , _dvSchemaVersion = currentSchemaVersion
-    , _dvShallowId = Nothing
-    }
-  toSzt (Just x) = DynamicValue 
-    { _dvCore = DSum 1 (toSzt x)
-    , _dvTypeInfo = Just $ TypeInfo 
-        { _tiTypeName = Just "Maybe"
-        , _tiModule = Just "GHC.Maybe"
-        , _tiConstructors = ["Nothing", "Just"]
-        , _tiFieldLabels = []
-        , _tiStructure = Nothing
-        }
+instance (ToSZT a, Typeable a) => ToSZT (Maybe a) where
+  toSzt val = DynamicValue
+    { _dvCore = case val of
+        Nothing -> DSum 0 (DynamicValue DUnit Nothing currentSchemaVersion Nothing)
+        Just x -> DSum 1 (toSzt x)
+    , _dvTypeInfo = Just $ typeInfoForRep (typeRep (Proxy :: Proxy (Maybe a)))
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
     }
@@ -388,28 +377,12 @@ instance FromSZT a => FromSZT (Maybe a) where
   fromSzt _ = Left (StructuralMismatch "Invalid Maybe structure")
 
 -- Either
-instance (ToSZT a, ToSZT b) => ToSZT (Either a b) where
-  toSzt (Left x) = DynamicValue 
-    { _dvCore = DSum 0 (toSzt x)
-    , _dvTypeInfo = Just $ TypeInfo 
-        { _tiTypeName = Just "Either"
-        , _tiModule = Just "Data.Either"
-        , _tiConstructors = ["Left", "Right"]
-        , _tiFieldLabels = []
-        , _tiStructure = Nothing
-        }
-    , _dvSchemaVersion = currentSchemaVersion
-    , _dvShallowId = Nothing
-    }
-  toSzt (Right y) = DynamicValue 
-    { _dvCore = DSum 1 (toSzt y)
-    , _dvTypeInfo = Just $ TypeInfo 
-        { _tiTypeName = Just "Either"
-        , _tiModule = Just "Data.Either"
-        , _tiConstructors = ["Left", "Right"]
-        , _tiFieldLabels = []
-        , _tiStructure = Nothing
-        }
+instance (ToSZT a, ToSZT b, Typeable a, Typeable b) => ToSZT (Either a b) where
+  toSzt val = DynamicValue
+    { _dvCore = case val of
+        Left x -> DSum 0 (toSzt x)
+        Right y -> DSum 1 (toSzt y)
+    , _dvTypeInfo = Just $ typeInfoForRep (typeRep (Proxy :: Proxy (Either a b)))
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
     }

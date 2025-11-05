@@ -79,6 +79,7 @@ message TypeInfo {
   repeated string constructors = 3;   // ["A", "B", "C"]
   repeated string field_labels = 4;   // Record field names in order
   TypeStructure structure = 5;
+  repeated TypeInfo type_parameters = 6;  // Type parameters (e.g., for "Model t v" applied to concrete types)
 }
 
 message TypeStructure {

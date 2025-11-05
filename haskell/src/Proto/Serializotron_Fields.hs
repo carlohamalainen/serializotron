@@ -342,6 +342,12 @@ typeName ::
    Data.ProtoLens.Field.HasField s "typeName" a) =>
   Lens.Family2.LensLike' f s a
 typeName = Data.ProtoLens.Field.field @"typeName"
+typeParameters ::
+  forall f s a.
+  (Prelude.Functor f,
+   Data.ProtoLens.Field.HasField s "typeParameters" a) =>
+  Lens.Family2.LensLike' f s a
+typeParameters = Data.ProtoLens.Field.field @"typeParameters"
 unit ::
   forall f s a.
   (Prelude.Functor f, Data.ProtoLens.Field.HasField s "unit" a) =>
@@ -383,6 +389,13 @@ vec'fields ::
    Data.ProtoLens.Field.HasField s "vec'fields" a) =>
   Lens.Family2.LensLike' f s a
 vec'fields = Data.ProtoLens.Field.field @"vec'fields"
+vec'typeParameters ::
+  forall f s a.
+  (Prelude.Functor f,
+   Data.ProtoLens.Field.HasField s "vec'typeParameters" a) =>
+  Lens.Family2.LensLike' f s a
+vec'typeParameters
+  = Data.ProtoLens.Field.field @"vec'typeParameters"
 word32Val ::
   forall f s a.
   (Prelude.Functor f,

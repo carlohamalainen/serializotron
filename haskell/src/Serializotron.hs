@@ -348,6 +348,9 @@ data TypeInfo = TypeInfo
 
     -- | Detailed structural information
   , _tiStructure :: Maybe TypeStructure
+
+    -- | Type parameters (e.g., for "Model t v" applied to concrete types like "Model CartesianTupleSystem Arithmetic")
+  , _tiTypeParameters :: [TypeInfo]
   }
   deriving stock (Generic, Show, Eq, Ord)
 
@@ -355,7 +358,7 @@ makeLenses ''TypeInfo
 makeLenses ''FieldInfo
 
 emptyTypeInfo :: TypeInfo
-emptyTypeInfo = TypeInfo Nothing Nothing [] [] Nothing
+emptyTypeInfo = TypeInfo Nothing Nothing [] [] Nothing []
 
 assignFieldLabels :: [FieldInfo] -> [FieldInfo]
 assignFieldLabels fields = zipWith assign [1 :: Int ..] fields
@@ -404,10 +407,13 @@ typeInfoForRep rep =
   let tyCon = typeRepTyCon rep
       nameText = Text.pack (tyConName tyCon)
       moduleText = Text.pack (tyConModule tyCon)
+      -- Extract type parameters recursively
+      typeParams = map typeInfoForRep (typeRepArgs rep)
    in emptyTypeInfo
         { _tiTypeName = Just nameText
         , _tiModule = Just moduleText
         , _tiStructure = structureForTypeRep rep
+        , _tiTypeParameters = typeParams
         }
 
 structureForTypeRep :: TypeRep -> Maybe TypeStructure
@@ -1429,6 +1435,7 @@ instance ToSZT Int where
               , _tiConstructors = []
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTInt)
+              , _tiTypeParameters = []
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1446,6 +1453,7 @@ instance ToSZT Double where
               , _tiConstructors = []
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTDouble)
+              , _tiTypeParameters = []
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1463,6 +1471,7 @@ instance ToSZT Text where
               , _tiConstructors = []
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTText)
+              , _tiTypeParameters = []
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1480,6 +1489,7 @@ instance ToSZT Bool where
               , _tiConstructors = ["False", "True"]
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTBool)
+              , _tiTypeParameters = []
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1497,6 +1507,7 @@ instance ToSZT ByteString where
               , _tiConstructors = []
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTBytes)
+              , _tiTypeParameters = []
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1514,16 +1525,17 @@ instance (ToSZT a) => ToSZT [a] where
               , _tiConstructors = ["[]", ":"]
               , _tiFieldLabels = []
               , _tiStructure = Just (TSList elementTypeInfo)
+              , _tiTypeParameters = [elementTypeInfo]
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
       }
     where
       elementTypeInfo = case xs of
-        [] -> TypeInfo Nothing Nothing [] [] Nothing -- Unknown element type for empty list
+        [] -> emptyTypeInfo -- Unknown element type for empty list
         (x : _) -> case toSzt x of
           DynamicValue _ (Just ti) _ _ -> ti
-          _ -> TypeInfo Nothing Nothing [] [] Nothing
+          _ -> emptyTypeInfo
 
 -- Generic type info instances
 instance (Datatype d, GGetConstructorNames f, GGetStructure f, GGetAllConstructorNames f, GGetCompleteStructure f, GGetFieldInfos f, GGetTypeInfo f) => GGetTypeInfo (M1 D d f) where
@@ -1550,10 +1562,10 @@ instance (GGetTypeInfo f) => GGetTypeInfo (M1 S s f) where
   gGetTypeInfo (M1 x) = gGetTypeInfo x
 
 instance GGetTypeInfo U1 where
-  gGetTypeInfo U1 _tr = TypeInfo Nothing Nothing [] [] Nothing
+  gGetTypeInfo U1 _tr = emptyTypeInfo
 
 instance GGetTypeInfo (K1 i a) where
-  gGetTypeInfo (K1 _) _tr = TypeInfo Nothing Nothing [] [] Nothing
+  gGetTypeInfo (K1 _) _tr = emptyTypeInfo
 
 instance (GGetTypeInfo f, GGetTypeInfo g, GGetFieldInfos f, GGetFieldInfos g) => GGetTypeInfo (f :*: g) where
   gGetTypeInfo prod _ =
@@ -1566,6 +1578,7 @@ instance (GGetTypeInfo f, GGetTypeInfo g, GGetFieldInfos f, GGetFieldInfos g) =>
           , _tiConstructors = []       -- Product combines fields, not constructors
           , _tiFieldLabels = labels
           , _tiStructure = Just $ TSProduct labeledFields
+          , _tiTypeParameters = []     -- Products don't have type parameters at this level
           }
 instance (GGetTypeInfo f, GGetTypeInfo g) => GGetTypeInfo (f :+: g) where
   gGetTypeInfo (L1 x) tr = gGetTypeInfo x tr
@@ -1666,8 +1679,8 @@ instance GGetStructure U1 where
 -- Complete structure instances
 instance (GGetCompleteStructure f, GGetCompleteStructure g) => GGetCompleteStructure (f :+: g) where
   gGetCompleteStructure _ = TSSum
-    [ TypeInfo Nothing Nothing [] [] (Just (gGetCompleteStructure (Proxy :: Proxy (f p))))
-    , TypeInfo Nothing Nothing [] [] (Just (gGetCompleteStructure (Proxy :: Proxy (g p))))
+    [ emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (f p))
+    , emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (g p))
     ]
 
 -- For constructor level, we need to create sample values to extract structure
@@ -1696,8 +1709,8 @@ instance GGetCompleteStructure U1 where
 -- Product type instance
 instance (GGetCompleteStructure f, GGetCompleteStructure g) => GGetCompleteStructure (f :*: g) where
   gGetCompleteStructure _ = TSProduct $ assignFieldLabels
-    [ FieldInfo Nothing (TypeInfo Nothing Nothing [] [] (Just (gGetCompleteStructure (Proxy :: Proxy (f p)))))
-    , FieldInfo Nothing (TypeInfo Nothing Nothing [] [] (Just (gGetCompleteStructure (Proxy :: Proxy (g p)))))
+    [ FieldInfo Nothing (emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (f p)))
+    , FieldInfo Nothing (emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (g p)))
     ]
 instance Typeable a => GGetStructure (K1 i a) where
   gGetStructure _ = case typeRep (Proxy @a) of
@@ -2241,6 +2254,7 @@ instance (ToSZT a, ToSZT b) => ToSZT (a, b) where
               , _tiConstructors = ["(,)"]
               , _tiFieldLabels = []
               , _tiStructure = Nothing -- Simplified
+              , _tiTypeParameters = []
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -2267,6 +2281,7 @@ instance (ToSZT a, ToSZT b, ToSZT c) => ToSZT (a, b, c) where
               , _tiConstructors = ["(,,)"]
               , _tiFieldLabels = []
               , _tiStructure = Nothing
+              , _tiTypeParameters = []
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -2291,6 +2306,7 @@ instance (ToSZT a, ToSZT b, ToSZT c, ToSZT d) => ToSZT (a, b, c, d) where
         , _tiConstructors = ["(,,,)"]
               , _tiFieldLabels = []
         , _tiStructure = Nothing
+        , _tiTypeParameters = []
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -2447,13 +2463,14 @@ toProtoPrimitiveValue = \case
   PBytes bs -> defMessage Lens.& Proto.bytesVal Lens..~ bs
 
 toProtoTypeInfo :: TypeInfo -> Proto.TypeInfo
-toProtoTypeInfo (TypeInfo name mod cons fieldLabels struct) =
+toProtoTypeInfo (TypeInfo name mod cons fieldLabels struct typeParams) =
   defMessage
     Lens.& Proto.typeName Lens..~ fromMaybe "" name
     Lens.& Proto.moduleName Lens..~ fromMaybe "" mod
     Lens.& Proto.constructors Lens..~ cons
     Lens.& Proto.fieldLabels Lens..~ fieldLabels
     Lens.& Proto.structure Lens..~ maybe defMessage toProtoTypeStructure struct
+    Lens.& Proto.typeParameters Lens..~ map toProtoTypeInfo typeParams
 
 toProtoTypeStructure :: TypeStructure -> Proto.TypeStructure
 toProtoTypeStructure = \case
@@ -2585,6 +2602,7 @@ fromProtoTypeInfo protoTI = do
     if protoTI Lens.^. Proto.structure == defMessage
       then return Nothing
       else Just <$> fromProtoTypeStructure (protoTI Lens.^. Proto.structure)
+  typeParams <- traverse fromProtoTypeInfo (protoTI Lens.^. Proto.typeParameters)
   let info =
         TypeInfo
           (if Text.null (protoTI Lens.^. Proto.typeName) then Nothing else Just (protoTI Lens.^. Proto.typeName))
@@ -2592,6 +2610,7 @@ fromProtoTypeInfo protoTI = do
           (protoTI Lens.^. Proto.constructors)
           (protoTI Lens.^. Proto.fieldLabels)
           struct
+          typeParams
   normalizeTypeInfo info
 fromProtoTypeStructure :: Proto.TypeStructure -> Either SerializotronError TypeStructure
 fromProtoTypeStructure protoTS =
