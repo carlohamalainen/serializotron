@@ -1404,6 +1404,10 @@ class GGetStructure f where
 class GGetCompleteStructure f where
   gGetCompleteStructure :: Proxy (f p) -> TypeStructure
 
+-- | Extract full TypeInfo (including type name) from constructor arguments
+class GGetConstructorTypeInfo f where
+  gGetConstructorTypeInfo :: Proxy (f p) -> TypeInfo
+
 -- Generic instances for GToSZT
 instance GToSZT U1 where
   gToSZT U1 = DUnit
@@ -1677,10 +1681,10 @@ instance GGetStructure U1 where
   gGetStructure _ = TSUnit
 
 -- Complete structure instances
-instance (GGetCompleteStructure f, GGetCompleteStructure g) => GGetCompleteStructure (f :+: g) where
+instance (GGetConstructorTypeInfo f, GGetConstructorTypeInfo g) => GGetCompleteStructure (f :+: g) where
   gGetCompleteStructure _ = TSSum
-    [ emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (f p))
-    , emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (g p))
+    [ gGetConstructorTypeInfo (Proxy :: Proxy (f p))
+    , gGetConstructorTypeInfo (Proxy :: Proxy (g p))
     ]
 
 -- For constructor level, we need to create sample values to extract structure
@@ -1712,6 +1716,41 @@ instance (GGetCompleteStructure f, GGetCompleteStructure g) => GGetCompleteStruc
     [ FieldInfo Nothing (emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (f p)))
     , FieldInfo Nothing (emptyTypeInfo & tiStructure ?~ gGetCompleteStructure (Proxy :: Proxy (g p)))
     ]
+
+-- GGetConstructorTypeInfo instances
+-- These extract full TypeInfo (including type name) for constructor arguments
+
+instance Typeable a => GGetConstructorTypeInfo (K1 i a) where
+  gGetConstructorTypeInfo _ = typeInfoForRep (typeRep (Proxy @a))
+
+instance GGetConstructorTypeInfo U1 where
+  gGetConstructorTypeInfo _ = emptyTypeInfo & tiStructure ?~ TSUnit
+
+instance GGetConstructorTypeInfo f => GGetConstructorTypeInfo (M1 D d f) where
+  gGetConstructorTypeInfo _ = gGetConstructorTypeInfo (Proxy :: Proxy (f p))
+
+instance GGetConstructorTypeInfo f => GGetConstructorTypeInfo (M1 C c f) where
+  gGetConstructorTypeInfo _ = gGetConstructorTypeInfo (Proxy :: Proxy (f p))
+
+instance GGetConstructorTypeInfo f => GGetConstructorTypeInfo (M1 S s f) where
+  gGetConstructorTypeInfo _ = gGetConstructorTypeInfo (Proxy :: Proxy (f p))
+
+-- For product types (tuples/records), create a TypeInfo with product structure
+instance (GGetConstructorTypeInfo f, GGetConstructorTypeInfo g) => GGetConstructorTypeInfo (f :*: g) where
+  gGetConstructorTypeInfo _ =
+    let leftInfo = gGetConstructorTypeInfo (Proxy :: Proxy (f p))
+        rightInfo = gGetConstructorTypeInfo (Proxy :: Proxy (g p))
+    in emptyTypeInfo & tiStructure ?~ TSProduct
+         [ FieldInfo Nothing leftInfo
+         , FieldInfo Nothing rightInfo
+         ]
+
+-- For nested sum types (multiple constructors within a branch)
+instance (GGetConstructorTypeInfo f, GGetConstructorTypeInfo g) => GGetConstructorTypeInfo (f :+: g) where
+  gGetConstructorTypeInfo _ =
+    let leftInfo = gGetConstructorTypeInfo (Proxy :: Proxy (f p))
+        rightInfo = gGetConstructorTypeInfo (Proxy :: Proxy (g p))
+    in emptyTypeInfo & tiStructure ?~ TSSum [leftInfo, rightInfo]
 instance Typeable a => GGetStructure (K1 i a) where
   gGetStructure _ = case typeRep (Proxy @a) of
     tr | tr == typeRep (Proxy @Int)         -> TSPrimitive PTInt
