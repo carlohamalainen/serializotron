@@ -366,7 +366,8 @@ instance (ToSZT a, Typeable a) => ToSZT (Maybe a) where
     { _dvCore = case val of
         Nothing -> DSum 0 (DynamicValue DUnit Nothing currentSchemaVersion Nothing)
         Just x -> DSum 1 (toSzt x)
-    , _dvTypeInfo = Just $ typeInfoForRep (typeRep (Proxy :: Proxy (Maybe a)))
+    , _dvTypeInfo = Just $ (typeInfoForRep (typeRep (Proxy :: Proxy (Maybe a))))
+        { _tiConstructors = ["Nothing", "Just"] }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
     }
@@ -382,7 +383,8 @@ instance (ToSZT a, ToSZT b, Typeable a, Typeable b) => ToSZT (Either a b) where
     { _dvCore = case val of
         Left x -> DSum 0 (toSzt x)
         Right y -> DSum 1 (toSzt y)
-    , _dvTypeInfo = Just $ typeInfoForRep (typeRep (Proxy :: Proxy (Either a b)))
+    , _dvTypeInfo = Just $ (typeInfoForRep (typeRep (Proxy :: Proxy (Either a b))))
+        { _tiConstructors = ["Left", "Right"] }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
     }
