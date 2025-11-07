@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -2170,8 +2171,19 @@ formatValidationError = \case
 -- @
 class FromSZT a where
   fromSzt :: DynamicValue -> Either SZTError a
-  default fromSzt :: (Generic a, GFromSZT (Rep a)) => DynamicValue -> Either SZTError a
-  fromSzt dynValue = GHC.Generics.to <$> gFromSZT (_dvCore dynValue)
+  default fromSzt :: (Generic a, GFromSZT (Rep a), GGetAllConstructorNames (Rep a)) => DynamicValue -> Either SZTError a
+  fromSzt dynValue = do
+    -- Validate that the stored TypeInfo matches the expected type
+    let storedTypeInfo = _dvTypeInfo dynValue
+        expectedConstructors = gGetAllConstructorNames (Proxy @(Rep a ()))
+        storedConstructors = maybe [] (^. tiConstructors) storedTypeInfo
+    -- Only validate if we have constructor info on both sides
+    if not (null expectedConstructors) && not (null storedConstructors) && storedConstructors /= expectedConstructors
+      then Left $ ConstructorMismatch
+             ("constructors " <> Text.intercalate ", " expectedConstructors)
+             ("constructors " <> Text.intercalate ", " storedConstructors <>
+              ". Constructor order or names have changed.")
+      else GHC.Generics.to <$> gFromSZT (_dvCore dynValue)
 
 -- | Generic deserialization type class
 class GFromSZT f where
@@ -2366,7 +2378,7 @@ instance (FromSZT a, FromSZT b, FromSZT c, FromSZT d) => FromSZT (a, b, c, d) wh
 
 data TypeInfoPool = TypeInfoPool
   { _tipNextId :: Word32
-  , _tipInterned :: Map.Map TypeInfo Word32
+  , _tipByName :: Map.Map (Maybe Text, Maybe Text) Word32  -- (module, name) -> ID
   , _tipShared :: Map.Map Word32 Proto.TypeInfo
   }
 
@@ -2378,18 +2390,74 @@ sharedTypeInfoMap = _tipShared
 
 type TypeInfoM = State TypeInfoPool
 
+-- | Merge two TypeInfo structures, preferring the more complete one.
+-- Prefers non-Nothing fields and non-empty lists.
+mergeTypeInfo :: TypeInfo -> TypeInfo -> TypeInfo
+mergeTypeInfo ti1 ti2 = TypeInfo
+  { _tiTypeName = ti1 ^. tiTypeName <|> ti2 ^. tiTypeName
+  , _tiModule = ti1 ^. tiModule <|> ti2 ^. tiModule
+  , _tiConstructors = if null (ti1 ^. tiConstructors) then ti2 ^. tiConstructors else ti1 ^. tiConstructors
+  , _tiFieldLabels = if null (ti1 ^. tiFieldLabels) then ti2 ^. tiFieldLabels else ti1 ^. tiFieldLabels
+  , _tiStructure = ti1 ^. tiStructure <|> ti2 ^. tiStructure
+  , _tiTypeParameters = if null (ti1 ^. tiTypeParameters) then ti2 ^. tiTypeParameters else ti1 ^. tiTypeParameters
+  }
+
+-- | Intern a TypeInfo, recursively interning all nested TypeInfo structures.
+-- This ensures that constructor argument types and field types also appear
+-- in the shared type pool, even if they only have partial type information.
+-- Uses name-based deduplication, merging TypeInfos with the same (module, name).
 internTypeInfo :: Maybe TypeInfo -> TypeInfoM (Maybe Word32)
 internTypeInfo Nothing = pure Nothing
 internTypeInfo (Just ti) = do
-  TypeInfoPool nextId interned shared <- get
-  case Map.lookup ti interned of
-    Just existing -> pure (Just existing)
-    Nothing -> do
-      let protoTI = toProtoTypeInfo ti
-          assigned = nextId
-          updatedPool = TypeInfoPool (nextId + 1) (Map.insert ti assigned interned) (Map.insert assigned protoTI shared)
-      put updatedPool
-      pure (Just assigned)
+  -- First, recursively intern all nested TypeInfo structures
+  case ti ^. tiStructure of
+    Just (TSSum branches) -> do
+      -- Intern all constructor argument types
+      mapM_ (internTypeInfo . Just) branches
+    Just (TSProduct fields) -> do
+      -- Intern all field types
+      mapM_ (internTypeInfo . Just . view fiFieldType) fields
+    Just (TSList elemTi) -> do
+      -- Intern element type
+      _ <- internTypeInfo (Just elemTi)
+      pure ()
+    _ -> pure ()
+
+  -- Also intern type parameters (for parameterized types like Maybe, Either, etc.)
+  mapM_ (internTypeInfo . Just) (ti ^. tiTypeParameters)
+
+  -- Finally, intern this TypeInfo itself
+  -- Use (module, name) as the key for deduplication
+  let nameKey = (ti ^. tiModule, ti ^. tiTypeName)
+
+  -- Skip anonymous types (no name)
+  case nameKey of
+    (_, Nothing) -> pure Nothing
+    _ -> do
+      TypeInfoPool nextId byName shared <- get
+      case Map.lookup nameKey byName of
+        Just existingId -> do
+          -- Already have a TypeInfo with this name - merge them
+          let existingProto = shared Map.! existingId
+          -- The existing proto has the structure we serialized before
+          -- We want to keep the better version (more complete)
+          -- For now, we'll update with the merged version
+          let mergedTi = mergeTypeInfo ti (error "Cannot convert back from proto - using new ti")
+              -- Since we can't easily convert proto back to TypeInfo,
+              -- we'll just use the new one if it has structure, otherwise keep existing
+          if isNothing (ti ^. tiStructure)
+            then pure (Just existingId)  -- Keep existing if new one has no structure
+            else do
+              -- New one has structure - update the existing entry
+              let protoTI = toProtoTypeInfo ti
+              put $ TypeInfoPool nextId byName (Map.insert existingId protoTI shared)
+              pure (Just existingId)
+        Nothing -> do
+          -- New type - add it
+          let protoTI = toProtoTypeInfo ti
+              assigned = nextId
+          put $ TypeInfoPool (nextId + 1) (Map.insert nameKey assigned byName) (Map.insert assigned protoTI shared)
+          pure (Just assigned)
 
 toProtoDynamicValue :: DynamicValue -> TypeInfoM Proto.DynamicValue
 toProtoDynamicValue = toProtoDynamicValueWith Nothing
@@ -2538,7 +2606,11 @@ toProtoPrimitiveType = \case
   PTBytes -> Proto.PRIMITIVE_BYTES
 
 fromProtoDynamicValue :: Word32 -> Map.Map Word32 TypeInfo -> Proto.DynamicValue -> Either SerializotronError DynamicValue
-fromProtoDynamicValue schemaVersion typeTable protoDV = do
+fromProtoDynamicValue = fromProtoDynamicValueWithOverride Nothing
+
+-- | Decode with an optional override TypeInfo (used for nested sums)
+fromProtoDynamicValueWithOverride :: Maybe TypeInfo -> Word32 -> Map.Map Word32 TypeInfo -> Proto.DynamicValue -> Either SerializotronError DynamicValue
+fromProtoDynamicValueWithOverride overrideTypeInfo schemaVersion typeTable protoDV = do
   let inlineTypeProto = protoDV Lens.^. Proto.typeInfo
       hasInline = inlineTypeProto /= defMessage
       refId = protoDV Lens.^. Proto.typeInfoRef
@@ -2565,7 +2637,7 @@ fromProtoDynamicValue schemaVersion typeTable protoDV = do
             Nothing ->
               Left $ ValidationError $ InvalidSchema $
                 "Unknown type_info_ref " <> Text.pack (show refId)
-          else pure Nothing
+          else pure overrideTypeInfo  -- Use override only if proto has no type info
   core <- fromProtoDynamicCore schemaVersion typeTable resolvedTypeInfo (protoDV Lens.^. Proto.core)
   return $ DynamicValue core resolvedTypeInfo schemaVersion Nothing
 
@@ -2576,9 +2648,26 @@ fromProtoDynamicCore schemaVersion typeTable typeInfo protoCore =
     Just (Proto.DynamicCore'Product prod) -> DProduct <$> traverse (fromProtoDynamicValue schemaVersion typeTable) (prod Lens.^. Proto.fields)
     Just (Proto.DynamicCore'Sum sum') -> do
       let providedIndex = sum' Lens.^. Proto.constructorIndex
-      (localIndex, _branchInfo) <- selectSumBranch typeInfo providedIndex
-      value <- fromProtoDynamicValue schemaVersion typeTable (sum' Lens.^. Proto.value)
-      return $ DSum localIndex value
+          storedName = sum' Lens.^. Proto.constructorName
+      (localIndex, branchInfo) <- selectSumBranch typeInfo providedIndex
+      -- Validate constructor name matches if we have type info
+      case typeInfo of
+        Just ti ->
+          let expectedName = lookupConstructorName providedIndex ti
+           in if storedName /= expectedName && not (Text.null storedName)
+                then Left $ ValidationError $ InvalidSchema $
+                       "Constructor name mismatch: stored '" <> storedName
+                       <> "' but expected '" <> expectedName
+                       <> "' at index " <> Text.pack (show providedIndex)
+                       <> ". This likely means the constructor order changed in the type definition."
+                else do
+                  -- Decode with branchInfo as override if the proto value doesn't have type info
+                  value <- fromProtoDynamicValueWithOverride branchInfo schemaVersion typeTable (sum' Lens.^. Proto.value)
+                  return $ DSum localIndex value
+        Nothing -> do
+          -- No type info available, decode without override
+          value <- fromProtoDynamicValueWithOverride branchInfo schemaVersion typeTable (sum' Lens.^. Proto.value)
+          return $ DSum localIndex value
     Just (Proto.DynamicCore'List list') -> DList <$> traverse (fromProtoDynamicValue schemaVersion typeTable) (list' Lens.^. Proto.elements)
     Just (Proto.DynamicCore'Unit _) -> return DUnit
     Just (Proto.DynamicCore'Reference ref) -> return $ DReference (ref Lens.^. Proto.referenceId)
@@ -3291,6 +3380,119 @@ loadSztRaw path = do
               case fromProtoDynamicValue schemaVersion sharedTypeMap (sztFile Lens.^. Proto.value) of
                 Left err -> return $ Left err
                 Right dynValue -> return $ resolveReferences sharedTable dynValue
+
+--------------------------------------------------------------------------------
+-- Type Metadata Export (for TypeScript codegen and schema documentation)
+--------------------------------------------------------------------------------
+
+-- | Wrapper for heterogeneous type metadata.
+--
+-- This allows collecting TypeInfo for different types in a single list,
+-- which is useful for exporting type schemas without needing actual values.
+data SomeTypeMetadata where
+  SomeTypeMetadata :: (Generic a, GGetTypeInfo (Rep a), Typeable a, GGetCompleteStructure (Rep a), GGetAllConstructorNames (Rep a)) => Proxy a -> SomeTypeMetadata
+
+-- | Extract TypeInfo from a Proxy without needing an actual value.
+--
+-- This uses the Generic instance to derive complete type information,
+-- including structure, constructor names, field names, etc.
+--
+-- Example:
+-- @
+-- typeMetadata (Proxy @Person)
+-- typeMetadata (Proxy @Model)
+-- @
+typeMetadata :: forall a. (Generic a, GGetTypeInfo (Rep a), Typeable a, GGetCompleteStructure (Rep a), GGetAllConstructorNames (Rep a)) => Proxy a -> SomeTypeMetadata
+typeMetadata = SomeTypeMetadata
+
+-- | Extract TypeInfo from SomeTypeMetadata wrapper.
+extractTypeInfo :: SomeTypeMetadata -> TypeInfo
+extractTypeInfo (SomeTypeMetadata (_ :: Proxy a)) =
+  let rep = typeRep (Proxy @a)
+      tyCon = typeRepTyCon rep
+      nameText = Text.pack (tyConName tyCon)
+      moduleText = Text.pack (tyConModule tyCon)
+      -- Get type parameters
+      typeParams = map typeInfoForRep (typeRepArgs rep)
+   in TypeInfo
+        { _tiTypeName = Just nameText
+        , _tiModule = Just moduleText
+        , _tiConstructors = gGetAllConstructorNames (Proxy @(Rep a ()))
+        , _tiFieldLabels = []  -- Will be filled in by recursive interning when structure is encountered
+        , _tiStructure = Just $ gGetCompleteStructure (Proxy @(Rep a ()))
+        , _tiTypeParameters = typeParams
+        }
+
+-- | Save type metadata to an .szt file without needing actual values.
+--
+-- This is useful for generating TypeScript type definitions or other schema
+-- documentation without having to construct dummy values. The function will:
+--
+-- * Extract complete TypeInfo for each specified type using Generic instances
+-- * Recursively capture all referenced types (constructor arguments, fields, etc.)
+-- * Save an .szt file containing only the type pool (no data values)
+--
+-- The resulting file can be processed by TypeScript codegen or other tools
+-- that need schema information.
+--
+-- Example:
+-- @
+-- -- Export type schema for an API
+-- saveSztMetadata "api_types.szt"
+--   [ typeMetadata (Proxy @User)
+--   , typeMetadata (Proxy @Product)
+--   , typeMetadata (Proxy @Order)
+--   ]
+--
+-- -- All referenced types (Address, PaymentMethod, etc.) are automatically included
+-- @
+--
+-- Use cases:
+-- * Generate TypeScript definitions for frontend development
+-- * Create schema documentation
+-- * Validate compatibility between Haskell and other languages
+-- * Export type information for code generation tools
+saveSztMetadata :: FilePath -> [SomeTypeMetadata] -> IO ()
+saveSztMetadata path types =
+  saveSztMetadataWithCompression GZipCompression path types
+
+-- | Save type metadata with specific compression method.
+saveSztMetadataWithCompression :: CompressionMethod -> FilePath -> [SomeTypeMetadata] -> IO ()
+saveSztMetadataWithCompression compression path types = do
+  -- Extract TypeInfo from all provided types
+  let typeInfos = map extractTypeInfo types
+
+  -- Intern all types using our recursive interning logic
+  -- This will capture all nested types automatically
+  let (_, protoSharedTypes) = runState
+        (mapM_ (internTypeInfo . Just) typeInfos)
+        emptyTypeInfoPool
+
+  -- Create an .szt file with empty root value but full type pool
+  -- We use DUnit as a placeholder root value since we only care about the type pool
+  let emptyRoot = DynamicValue DUnit Nothing currentSchemaVersion Nothing
+  let (protoRoot, _, _) = encodeWithTypePool emptyRoot Map.empty
+
+  let sztFile =
+        defMessage
+          Lens.& Proto.schemaVersion Lens..~ currentSchemaVersion
+          Lens.& Proto.value Lens..~ protoRoot
+          Lens.& Proto.sharedValues Lens..~ Map.empty
+          Lens.& Proto.sharedTypeInfo Lens..~ sharedTypeInfoMap protoSharedTypes
+
+  let protoBytes = encodeMessage (sztFile :: Proto.SZTFile)
+
+  -- Apply compression if specified
+  let payloadBytes = case compression of
+        NoCompression -> protoBytes
+        GZipCompression -> LBS.toStrict $ GZip.compress $ LBS.fromStrict protoBytes
+
+  -- Combine header and payload
+  let header = mkHeader compression
+  let headerBytes = encodeHeader header
+  let finalBytes = ByteString.append headerBytes payloadBytes
+
+  ByteString.writeFile path finalBytes
 
 -- Resolve references in a DynamicValue using the shared table
 resolveReferences :: Map.Map Word32 (Either SerializotronError DynamicValue) -> DynamicValue -> Either SerializotronError DynamicValue

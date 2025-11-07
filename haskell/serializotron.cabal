@@ -79,6 +79,7 @@ library
                       lens-family,
                       memory,
                       mtl,
+                      pretty-simple,
                       process,
                       proto-lens,
                       proto-lens-runtime,
@@ -154,4 +155,52 @@ executable generate-samples
         vector,
         hashable,
         process,
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+executable small-examples
+    import:           warnings, common
+    hs-source-dirs:   app
+    main-is:          SmallExamples.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        pretty-simple,
+        serializotron,
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+executable save-foo
+    import:           warnings, common
+    hs-source-dirs:   app
+    main-is:          SaveFoo.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        serializotron,
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+executable load-foo
+    import:           warnings, common
+    hs-source-dirs:   app
+    main-is:          LoadFoo.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        serializotron,
+        text,
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+executable load-foo-correct
+    import:           warnings, common
+    hs-source-dirs:   app
+    main-is:          LoadFooCorrect.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        serializotron,
+        text,
+    ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+executable gadt-example
+    import:           warnings, common
+    hs-source-dirs:   app
+    main-is:          GADTExample.hs
+    build-depends:
+        base ^>= 4.18.3.0,
+        serializotron,
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
