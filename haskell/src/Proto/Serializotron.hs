@@ -3307,7 +3307,9 @@ instance Control.DeepSeq.NFData SumValue where
          * 'Proto.Serializotron_Fields.structure' @:: Lens' TypeInfo TypeStructure@
          * 'Proto.Serializotron_Fields.maybe'structure' @:: Lens' TypeInfo (Prelude.Maybe TypeStructure)@
          * 'Proto.Serializotron_Fields.typeParameters' @:: Lens' TypeInfo [TypeInfo]@
-         * 'Proto.Serializotron_Fields.vec'typeParameters' @:: Lens' TypeInfo (Data.Vector.Vector TypeInfo)@ -}
+         * 'Proto.Serializotron_Fields.vec'typeParameters' @:: Lens' TypeInfo (Data.Vector.Vector TypeInfo)@
+         * 'Proto.Serializotron_Fields.newtypeWrapper' @:: Lens' TypeInfo TypeInfo@
+         * 'Proto.Serializotron_Fields.maybe'newtypeWrapper' @:: Lens' TypeInfo (Prelude.Maybe TypeInfo)@ -}
 data TypeInfo
   = TypeInfo'_constructor {_TypeInfo'typeName :: !Data.Text.Text,
                            _TypeInfo'moduleName :: !Data.Text.Text,
@@ -3315,6 +3317,7 @@ data TypeInfo
                            _TypeInfo'fieldLabels :: !(Data.Vector.Vector Data.Text.Text),
                            _TypeInfo'structure :: !(Prelude.Maybe TypeStructure),
                            _TypeInfo'typeParameters :: !(Data.Vector.Vector TypeInfo),
+                           _TypeInfo'newtypeWrapper :: !(Prelude.Maybe TypeInfo),
                            _TypeInfo'_unknownFields :: !Data.ProtoLens.FieldSet}
   deriving stock (Prelude.Eq, Prelude.Ord)
 instance Prelude.Show TypeInfo where
@@ -3396,6 +3399,20 @@ instance Data.ProtoLens.Field.HasField TypeInfo "vec'typeParameters" (Data.Vecto
            _TypeInfo'typeParameters
            (\ x__ y__ -> x__ {_TypeInfo'typeParameters = y__}))
         Prelude.id
+instance Data.ProtoLens.Field.HasField TypeInfo "newtypeWrapper" TypeInfo where
+  fieldOf _
+    = (Prelude..)
+        (Lens.Family2.Unchecked.lens
+           _TypeInfo'newtypeWrapper
+           (\ x__ y__ -> x__ {_TypeInfo'newtypeWrapper = y__}))
+        (Data.ProtoLens.maybeLens Data.ProtoLens.defMessage)
+instance Data.ProtoLens.Field.HasField TypeInfo "maybe'newtypeWrapper" (Prelude.Maybe TypeInfo) where
+  fieldOf _
+    = (Prelude..)
+        (Lens.Family2.Unchecked.lens
+           _TypeInfo'newtypeWrapper
+           (\ x__ y__ -> x__ {_TypeInfo'newtypeWrapper = y__}))
+        Prelude.id
 instance Data.ProtoLens.Message TypeInfo where
   messageName _ = Data.Text.pack "szt.TypeInfo"
   packedMessageDescriptor _
@@ -3407,7 +3424,8 @@ instance Data.ProtoLens.Message TypeInfo where
       \\fconstructors\CAN\ETX \ETX(\tR\fconstructors\DC2!\n\
       \\ffield_labels\CAN\EOT \ETX(\tR\vfieldLabels\DC20\n\
       \\tstructure\CAN\ENQ \SOH(\v2\DC2.szt.TypeStructureR\tstructure\DC26\n\
-      \\SItype_parameters\CAN\ACK \ETX(\v2\r.szt.TypeInfoR\SOtypeParameters"
+      \\SItype_parameters\CAN\ACK \ETX(\v2\r.szt.TypeInfoR\SOtypeParameters\DC26\n\
+      \\SInewtype_wrapper\CAN\a \SOH(\v2\r.szt.TypeInfoR\SOnewtypeWrapper"
   packedFileDescriptor _ = packedFileDescriptor
   fieldsByTag
     = let
@@ -3464,6 +3482,14 @@ instance Data.ProtoLens.Message TypeInfo where
                  Data.ProtoLens.Unpacked
                  (Data.ProtoLens.Field.field @"typeParameters")) ::
               Data.ProtoLens.FieldDescriptor TypeInfo
+        newtypeWrapper__field_descriptor
+          = Data.ProtoLens.FieldDescriptor
+              "newtype_wrapper"
+              (Data.ProtoLens.MessageField Data.ProtoLens.MessageType ::
+                 Data.ProtoLens.FieldTypeDescriptor TypeInfo)
+              (Data.ProtoLens.OptionalField
+                 (Data.ProtoLens.Field.field @"maybe'newtypeWrapper")) ::
+              Data.ProtoLens.FieldDescriptor TypeInfo
       in
         Data.Map.fromList
           [(Data.ProtoLens.Tag 1, typeName__field_descriptor),
@@ -3471,7 +3497,8 @@ instance Data.ProtoLens.Message TypeInfo where
            (Data.ProtoLens.Tag 3, constructors__field_descriptor),
            (Data.ProtoLens.Tag 4, fieldLabels__field_descriptor),
            (Data.ProtoLens.Tag 5, structure__field_descriptor),
-           (Data.ProtoLens.Tag 6, typeParameters__field_descriptor)]
+           (Data.ProtoLens.Tag 6, typeParameters__field_descriptor),
+           (Data.ProtoLens.Tag 7, newtypeWrapper__field_descriptor)]
   unknownFields
     = Lens.Family2.Unchecked.lens
         _TypeInfo'_unknownFields
@@ -3484,6 +3511,7 @@ instance Data.ProtoLens.Message TypeInfo where
          _TypeInfo'fieldLabels = Data.Vector.Generic.empty,
          _TypeInfo'structure = Prelude.Nothing,
          _TypeInfo'typeParameters = Data.Vector.Generic.empty,
+         _TypeInfo'newtypeWrapper = Prelude.Nothing,
          _TypeInfo'_unknownFields = []}
   parseMessage
     = let
@@ -3590,6 +3618,16 @@ instance Data.ProtoLens.Message TypeInfo where
                                        (Data.ProtoLens.Encoding.Growing.append
                                           mutable'typeParameters y)
                                 loop x mutable'constructors mutable'fieldLabels v
+                        58
+                          -> do y <- (Data.ProtoLens.Encoding.Bytes.<?>)
+                                       (do len <- Data.ProtoLens.Encoding.Bytes.getVarInt
+                                           Data.ProtoLens.Encoding.Bytes.isolate
+                                             (Prelude.fromIntegral len) Data.ProtoLens.parseMessage)
+                                       "newtype_wrapper"
+                                loop
+                                  (Lens.Family2.set
+                                     (Data.ProtoLens.Field.field @"newtypeWrapper") y x)
+                                  mutable'constructors mutable'fieldLabels mutable'typeParameters
                         wire
                           -> do !y <- Data.ProtoLens.Encoding.Wire.parseTaggedValueFromWire
                                         wire
@@ -3703,8 +3741,25 @@ instance Data.ProtoLens.Message TypeInfo where
                                           Data.ProtoLens.encodeMessage _v))
                                (Lens.Family2.view
                                   (Data.ProtoLens.Field.field @"vec'typeParameters") _x))
-                            (Data.ProtoLens.Encoding.Wire.buildFieldSet
-                               (Lens.Family2.view Data.ProtoLens.unknownFields _x)))))))
+                            ((Data.Monoid.<>)
+                               (case
+                                    Lens.Family2.view
+                                      (Data.ProtoLens.Field.field @"maybe'newtypeWrapper") _x
+                                of
+                                  Prelude.Nothing -> Data.Monoid.mempty
+                                  (Prelude.Just _v)
+                                    -> (Data.Monoid.<>)
+                                         (Data.ProtoLens.Encoding.Bytes.putVarInt 58)
+                                         ((Prelude..)
+                                            (\ bs
+                                               -> (Data.Monoid.<>)
+                                                    (Data.ProtoLens.Encoding.Bytes.putVarInt
+                                                       (Prelude.fromIntegral
+                                                          (Data.ByteString.length bs)))
+                                                    (Data.ProtoLens.Encoding.Bytes.putBytes bs))
+                                            Data.ProtoLens.encodeMessage _v))
+                               (Data.ProtoLens.Encoding.Wire.buildFieldSet
+                                  (Lens.Family2.view Data.ProtoLens.unknownFields _x))))))))
 instance Control.DeepSeq.NFData TypeInfo where
   rnf
     = \ x__
@@ -3720,7 +3775,9 @@ instance Control.DeepSeq.NFData TypeInfo where
                          (_TypeInfo'fieldLabels x__)
                          (Control.DeepSeq.deepseq
                             (_TypeInfo'structure x__)
-                            (Control.DeepSeq.deepseq (_TypeInfo'typeParameters x__) ()))))))
+                            (Control.DeepSeq.deepseq
+                               (_TypeInfo'typeParameters x__)
+                               (Control.DeepSeq.deepseq (_TypeInfo'newtypeWrapper x__) ())))))))
 {- | Fields :
      
          * 'Proto.Serializotron_Fields.maybe'structure' @:: Lens' TypeStructure (Prelude.Maybe TypeStructure'Structure)@
@@ -4320,7 +4377,7 @@ packedFileDescriptor
     \\DC1constructor_index\CAN\ETX \SOH(\rR\DLEconstructorIndex\":\n\
     \\tListValue\DC2-\n\
     \\belements\CAN\SOH \ETX(\v2\DC1.szt.DynamicValueR\belements\"\v\n\
-    \\tUnitValue\"\249\SOH\n\
+    \\tUnitValue\"\177\STX\n\
     \\bTypeInfo\DC2\ESC\n\
     \\ttype_name\CAN\SOH \SOH(\tR\btypeName\DC2\US\n\
     \\vmodule_name\CAN\STX \SOH(\tR\n\
@@ -4328,7 +4385,8 @@ packedFileDescriptor
     \\fconstructors\CAN\ETX \ETX(\tR\fconstructors\DC2!\n\
     \\ffield_labels\CAN\EOT \ETX(\tR\vfieldLabels\DC20\n\
     \\tstructure\CAN\ENQ \SOH(\v2\DC2.szt.TypeStructureR\tstructure\DC26\n\
-    \\SItype_parameters\CAN\ACK \ETX(\v2\r.szt.TypeInfoR\SOtypeParameters\"\254\SOH\n\
+    \\SItype_parameters\CAN\ACK \ETX(\v2\r.szt.TypeInfoR\SOtypeParameters\DC26\n\
+    \\SInewtype_wrapper\CAN\a \SOH(\v2\r.szt.TypeInfoR\SOnewtypeWrapper\"\254\SOH\n\
     \\rTypeStructure\DC22\n\
     \\tprimitive\CAN\SOH \SOH(\SO2\DC2.szt.PrimitiveTypeH\NULR\tprimitive\DC21\n\
     \\aproduct\CAN\STX \SOH(\v2\NAK.szt.ProductStructureH\NULR\aproduct\DC2%\n\
@@ -4357,8 +4415,8 @@ packedFileDescriptor
     \\SIPRIMITIVE_INT32\DLE\ENQ\DC2\DC4\n\
     \\DLEPRIMITIVE_WORD32\DLE\ACK\DC2\NAK\n\
     \\DC1PRIMITIVE_INTEGER\DLE\a\DC2\DC3\n\
-    \\SIPRIMITIVE_BYTES\DLE\bJ\160 \n\
-    \\ACK\DC2\EOT\NUL\NUL}\SOH\n\
+    \\SIPRIMITIVE_BYTES\DLE\bJ\147!\n\
+    \\ACK\DC2\EOT\NUL\NUL~\SOH\n\
     \\b\n\
     \\SOH\f\DC2\ETX\NUL\NUL\DC2\n\
     \\b\n\
@@ -4676,7 +4734,7 @@ packedFileDescriptor
     \\n\
     \\ETX\EOT\b\SOH\DC2\ETXF\b\DC1\n\
     \6\n\
-    \\STX\EOT\t\DC2\EOTK\NULR\SOH\SUB* Type metadata for compatibility checking\n\
+    \\STX\EOT\t\DC2\EOTK\NULS\SOH\SUB* Type metadata for compatibility checking\n\
     \\n\
     \\n\
     \\n\
@@ -4743,214 +4801,224 @@ packedFileDescriptor
     \\ENQ\EOT\t\STX\ENQ\SOH\DC2\ETXQ\DC4#\n\
     \\f\n\
     \\ENQ\EOT\t\STX\ENQ\ETX\DC2\ETXQ&'\n\
+    \G\n\
+    \\EOT\EOT\t\STX\ACK\DC2\ETXR\STX\US\": For newtypes: the wrapped type (e.g., UserId wraps Text)\n\
+    \\n\
+    \\f\n\
+    \\ENQ\EOT\t\STX\ACK\ACK\DC2\ETXR\STX\n\
+    \\n\
+    \\f\n\
+    \\ENQ\EOT\t\STX\ACK\SOH\DC2\ETXR\v\SUB\n\
+    \\f\n\
+    \\ENQ\EOT\t\STX\ACK\ETX\DC2\ETXR\GS\RS\n\
     \\n\
     \\n\
     \\STX\EOT\n\
-    \\DC2\EOTT\NUL\\\SOH\n\
+    \\DC2\EOTU\NUL]\SOH\n\
     \\n\
     \\n\
     \\ETX\EOT\n\
-    \\SOH\DC2\ETXT\b\NAK\n\
+    \\SOH\DC2\ETXU\b\NAK\n\
     \\f\n\
     \\EOT\EOT\n\
-    \\b\NUL\DC2\EOTU\STX[\ETX\n\
+    \\b\NUL\DC2\EOTV\STX\\\ETX\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\b\NUL\SOH\DC2\ETXU\b\DC1\n\
+    \\b\NUL\SOH\DC2\ETXV\b\DC1\n\
     \\v\n\
     \\EOT\EOT\n\
-    \\STX\NUL\DC2\ETXV\EOT \n\
+    \\STX\NUL\DC2\ETXW\EOT \n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\NUL\ACK\DC2\ETXV\EOT\DC1\n\
+    \\STX\NUL\ACK\DC2\ETXW\EOT\DC1\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\NUL\SOH\DC2\ETXV\DC2\ESC\n\
+    \\STX\NUL\SOH\DC2\ETXW\DC2\ESC\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\NUL\ETX\DC2\ETXV\RS\US\n\
+    \\STX\NUL\ETX\DC2\ETXW\RS\US\n\
     \\v\n\
     \\EOT\EOT\n\
-    \\STX\SOH\DC2\ETXW\EOT!\n\
+    \\STX\SOH\DC2\ETXX\EOT!\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\SOH\ACK\DC2\ETXW\EOT\DC4\n\
+    \\STX\SOH\ACK\DC2\ETXX\EOT\DC4\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\SOH\SOH\DC2\ETXW\NAK\FS\n\
+    \\STX\SOH\SOH\DC2\ETXX\NAK\FS\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\SOH\ETX\DC2\ETXW\US \n\
+    \\STX\SOH\ETX\DC2\ETXX\US \n\
     \\v\n\
     \\EOT\EOT\n\
-    \\STX\STX\DC2\ETXX\EOT\EM\n\
+    \\STX\STX\DC2\ETXY\EOT\EM\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\STX\ACK\DC2\ETXX\EOT\DLE\n\
+    \\STX\STX\ACK\DC2\ETXY\EOT\DLE\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\STX\SOH\DC2\ETXX\DC1\DC4\n\
+    \\STX\STX\SOH\DC2\ETXY\DC1\DC4\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\STX\ETX\DC2\ETXX\ETB\CAN\n\
+    \\STX\STX\ETX\DC2\ETXY\ETB\CAN\n\
     \\v\n\
     \\EOT\EOT\n\
-    \\STX\ETX\DC2\ETXY\EOT\ESC\n\
+    \\STX\ETX\DC2\ETXZ\EOT\ESC\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\ETX\ACK\DC2\ETXY\EOT\DC1\n\
+    \\STX\ETX\ACK\DC2\ETXZ\EOT\DC1\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\ETX\SOH\DC2\ETXY\DC2\SYN\n\
+    \\STX\ETX\SOH\DC2\ETXZ\DC2\SYN\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\ETX\ETX\DC2\ETXY\EM\SUB\n\
+    \\STX\ETX\ETX\DC2\ETXZ\EM\SUB\n\
     \\v\n\
     \\EOT\EOT\n\
-    \\STX\EOT\DC2\ETXZ\EOT\ESC\n\
+    \\STX\EOT\DC2\ETX[\EOT\ESC\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\EOT\ACK\DC2\ETXZ\EOT\DC1\n\
+    \\STX\EOT\ACK\DC2\ETX[\EOT\DC1\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\EOT\SOH\DC2\ETXZ\DC2\SYN\n\
+    \\STX\EOT\SOH\DC2\ETX[\DC2\SYN\n\
     \\f\n\
     \\ENQ\EOT\n\
-    \\STX\EOT\ETX\DC2\ETXZ\EM\SUB\n\
+    \\STX\EOT\ETX\DC2\ETX[\EM\SUB\n\
     \\n\
     \\n\
-    \\STX\ENQ\NUL\DC2\EOT^\NULh\SOH\n\
+    \\STX\ENQ\NUL\DC2\EOT_\NULi\SOH\n\
     \\n\
     \\n\
-    \\ETX\ENQ\NUL\SOH\DC2\ETX^\ENQ\DC2\n\
+    \\ETX\ENQ\NUL\SOH\DC2\ETX_\ENQ\DC2\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\NUL\DC2\ETX_\STX\DC4\n\
+    \\EOT\ENQ\NUL\STX\NUL\DC2\ETX`\STX\DC4\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\NUL\SOH\DC2\ETX_\STX\SI\n\
+    \\ENQ\ENQ\NUL\STX\NUL\SOH\DC2\ETX`\STX\SI\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\NUL\STX\DC2\ETX_\DC2\DC3\n\
+    \\ENQ\ENQ\NUL\STX\NUL\STX\DC2\ETX`\DC2\DC3\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\SOH\DC2\ETX`\STX\ETB\n\
+    \\EOT\ENQ\NUL\STX\SOH\DC2\ETXa\STX\ETB\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\SOH\SOH\DC2\ETX`\STX\DC2\n\
+    \\ENQ\ENQ\NUL\STX\SOH\SOH\DC2\ETXa\STX\DC2\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\SOH\STX\DC2\ETX`\NAK\SYN\n\
+    \\ENQ\ENQ\NUL\STX\SOH\STX\DC2\ETXa\NAK\SYN\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\STX\DC2\ETXa\STX\NAK\n\
+    \\EOT\ENQ\NUL\STX\STX\DC2\ETXb\STX\NAK\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\STX\SOH\DC2\ETXa\STX\DLE\n\
+    \\ENQ\ENQ\NUL\STX\STX\SOH\DC2\ETXb\STX\DLE\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\STX\STX\DC2\ETXa\DC3\DC4\n\
+    \\ENQ\ENQ\NUL\STX\STX\STX\DC2\ETXb\DC3\DC4\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\ETX\DC2\ETXb\STX\NAK\n\
+    \\EOT\ENQ\NUL\STX\ETX\DC2\ETXc\STX\NAK\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\ETX\SOH\DC2\ETXb\STX\DLE\n\
+    \\ENQ\ENQ\NUL\STX\ETX\SOH\DC2\ETXc\STX\DLE\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\ETX\STX\DC2\ETXb\DC3\DC4\n\
+    \\ENQ\ENQ\NUL\STX\ETX\STX\DC2\ETXc\DC3\DC4\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\EOT\DC2\ETXc\STX\ETB\n\
+    \\EOT\ENQ\NUL\STX\EOT\DC2\ETXd\STX\ETB\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\EOT\SOH\DC2\ETXc\STX\DC2\n\
+    \\ENQ\ENQ\NUL\STX\EOT\SOH\DC2\ETXd\STX\DC2\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\EOT\STX\DC2\ETXc\NAK\SYN\n\
+    \\ENQ\ENQ\NUL\STX\EOT\STX\DC2\ETXd\NAK\SYN\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\ENQ\DC2\ETXd\STX\SYN\n\
+    \\EOT\ENQ\NUL\STX\ENQ\DC2\ETXe\STX\SYN\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\ENQ\SOH\DC2\ETXd\STX\DC1\n\
+    \\ENQ\ENQ\NUL\STX\ENQ\SOH\DC2\ETXe\STX\DC1\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\ENQ\STX\DC2\ETXd\DC4\NAK\n\
+    \\ENQ\ENQ\NUL\STX\ENQ\STX\DC2\ETXe\DC4\NAK\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\ACK\DC2\ETXe\STX\ETB\n\
+    \\EOT\ENQ\NUL\STX\ACK\DC2\ETXf\STX\ETB\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\ACK\SOH\DC2\ETXe\STX\DC2\n\
+    \\ENQ\ENQ\NUL\STX\ACK\SOH\DC2\ETXf\STX\DC2\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\ACK\STX\DC2\ETXe\NAK\SYN\n\
+    \\ENQ\ENQ\NUL\STX\ACK\STX\DC2\ETXf\NAK\SYN\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\a\DC2\ETXf\STX\CAN\n\
+    \\EOT\ENQ\NUL\STX\a\DC2\ETXg\STX\CAN\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\a\SOH\DC2\ETXf\STX\DC3\n\
+    \\ENQ\ENQ\NUL\STX\a\SOH\DC2\ETXg\STX\DC3\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\a\STX\DC2\ETXf\SYN\ETB\n\
+    \\ENQ\ENQ\NUL\STX\a\STX\DC2\ETXg\SYN\ETB\n\
     \\v\n\
-    \\EOT\ENQ\NUL\STX\b\DC2\ETXg\STX\SYN\n\
+    \\EOT\ENQ\NUL\STX\b\DC2\ETXh\STX\SYN\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\b\SOH\DC2\ETXg\STX\DC1\n\
+    \\ENQ\ENQ\NUL\STX\b\SOH\DC2\ETXh\STX\DC1\n\
     \\f\n\
-    \\ENQ\ENQ\NUL\STX\b\STX\DC2\ETXg\DC4\NAK\n\
+    \\ENQ\ENQ\NUL\STX\b\STX\DC2\ETXh\DC4\NAK\n\
     \\n\
     \\n\
-    \\STX\EOT\v\DC2\EOTj\NULq\SOH\n\
+    \\STX\EOT\v\DC2\EOTk\NULr\SOH\n\
     \\n\
     \\n\
-    \\ETX\EOT\v\SOH\DC2\ETXj\b\CAN\n\
+    \\ETX\EOT\v\SOH\DC2\ETXk\b\CAN\n\
     \\f\n\
-    \\EOT\EOT\v\ETX\NUL\DC2\EOTk\STXn\ETX\n\
+    \\EOT\EOT\v\ETX\NUL\DC2\EOTl\STXo\ETX\n\
     \\f\n\
-    \\ENQ\EOT\v\ETX\NUL\SOH\DC2\ETXk\n\
+    \\ENQ\EOT\v\ETX\NUL\SOH\DC2\ETXl\n\
     \\DC3\n\
     \\r\n\
-    \\ACK\EOT\v\ETX\NUL\STX\NUL\DC2\ETXl\EOT\SUB\n\
+    \\ACK\EOT\v\ETX\NUL\STX\NUL\DC2\ETXm\EOT\SUB\n\
     \\SO\n\
-    \\a\EOT\v\ETX\NUL\STX\NUL\ENQ\DC2\ETXl\EOT\n\
+    \\a\EOT\v\ETX\NUL\STX\NUL\ENQ\DC2\ETXm\EOT\n\
     \\n\
     \\SO\n\
-    \\a\EOT\v\ETX\NUL\STX\NUL\SOH\DC2\ETXl\v\NAK\n\
+    \\a\EOT\v\ETX\NUL\STX\NUL\SOH\DC2\ETXm\v\NAK\n\
     \\SO\n\
-    \\a\EOT\v\ETX\NUL\STX\NUL\ETX\DC2\ETXl\CAN\EM\n\
+    \\a\EOT\v\ETX\NUL\STX\NUL\ETX\DC2\ETXm\CAN\EM\n\
     \\r\n\
-    \\ACK\EOT\v\ETX\NUL\STX\SOH\DC2\ETXm\EOT\FS\n\
+    \\ACK\EOT\v\ETX\NUL\STX\SOH\DC2\ETXn\EOT\FS\n\
     \\SO\n\
-    \\a\EOT\v\ETX\NUL\STX\SOH\ACK\DC2\ETXm\EOT\f\n\
+    \\a\EOT\v\ETX\NUL\STX\SOH\ACK\DC2\ETXn\EOT\f\n\
     \\SO\n\
-    \\a\EOT\v\ETX\NUL\STX\SOH\SOH\DC2\ETXm\r\ETB\n\
+    \\a\EOT\v\ETX\NUL\STX\SOH\SOH\DC2\ETXn\r\ETB\n\
     \\SO\n\
-    \\a\EOT\v\ETX\NUL\STX\SOH\ETX\DC2\ETXm\SUB\ESC\n\
+    \\a\EOT\v\ETX\NUL\STX\SOH\ETX\DC2\ETXn\SUB\ESC\n\
     \\v\n\
-    \\EOT\EOT\v\STX\NUL\DC2\ETXp\STX \n\
+    \\EOT\EOT\v\STX\NUL\DC2\ETXq\STX \n\
     \\f\n\
-    \\ENQ\EOT\v\STX\NUL\EOT\DC2\ETXp\STX\n\
+    \\ENQ\EOT\v\STX\NUL\EOT\DC2\ETXq\STX\n\
     \\n\
     \\f\n\
-    \\ENQ\EOT\v\STX\NUL\ACK\DC2\ETXp\v\DC4\n\
+    \\ENQ\EOT\v\STX\NUL\ACK\DC2\ETXq\v\DC4\n\
     \\f\n\
-    \\ENQ\EOT\v\STX\NUL\SOH\DC2\ETXp\NAK\ESC\n\
+    \\ENQ\EOT\v\STX\NUL\SOH\DC2\ETXq\NAK\ESC\n\
     \\f\n\
-    \\ENQ\EOT\v\STX\NUL\ETX\DC2\ETXp\RS\US\n\
+    \\ENQ\EOT\v\STX\NUL\ETX\DC2\ETXq\RS\US\n\
     \\n\
     \\n\
-    \\STX\EOT\f\DC2\EOTs\NULu\SOH\n\
+    \\STX\EOT\f\DC2\EOTt\NULv\SOH\n\
     \\n\
     \\n\
-    \\ETX\EOT\f\SOH\DC2\ETXs\b\DC4\n\
+    \\ETX\EOT\f\SOH\DC2\ETXt\b\DC4\n\
     \\v\n\
-    \\EOT\EOT\f\STX\NUL\DC2\ETXt\STX*\n\
+    \\EOT\EOT\f\STX\NUL\DC2\ETXu\STX*\n\
     \\f\n\
-    \\ENQ\EOT\f\STX\NUL\EOT\DC2\ETXt\STX\n\
+    \\ENQ\EOT\f\STX\NUL\EOT\DC2\ETXu\STX\n\
     \\n\
     \\f\n\
-    \\ENQ\EOT\f\STX\NUL\ACK\DC2\ETXt\v\DC3\n\
+    \\ENQ\EOT\f\STX\NUL\ACK\DC2\ETXu\v\DC3\n\
     \\f\n\
-    \\ENQ\EOT\f\STX\NUL\SOH\DC2\ETXt\DC4%\n\
+    \\ENQ\EOT\f\STX\NUL\SOH\DC2\ETXu\DC4%\n\
     \\f\n\
-    \\ENQ\EOT\f\STX\NUL\ETX\DC2\ETXt()\n\
+    \\ENQ\EOT\f\STX\NUL\ETX\DC2\ETXu()\n\
     \\n\
     \\n\
-    \\STX\EOT\r\DC2\EOTw\NULy\SOH\n\
+    \\STX\EOT\r\DC2\EOTx\NULz\SOH\n\
     \\n\
     \\n\
-    \\ETX\EOT\r\SOH\DC2\ETXw\b\NAK\n\
+    \\ETX\EOT\r\SOH\DC2\ETXx\b\NAK\n\
     \\v\n\
-    \\EOT\EOT\r\STX\NUL\DC2\ETXx\STX\FS\n\
+    \\EOT\EOT\r\STX\NUL\DC2\ETXy\STX\FS\n\
     \\f\n\
-    \\ENQ\EOT\r\STX\NUL\ACK\DC2\ETXx\STX\n\
+    \\ENQ\EOT\r\STX\NUL\ACK\DC2\ETXy\STX\n\
     \\n\
     \\f\n\
-    \\ENQ\EOT\r\STX\NUL\SOH\DC2\ETXx\v\ETB\n\
+    \\ENQ\EOT\r\STX\NUL\SOH\DC2\ETXy\v\ETB\n\
     \\f\n\
-    \\ENQ\EOT\r\STX\NUL\ETX\DC2\ETXx\SUB\ESC\n\
+    \\ENQ\EOT\r\STX\NUL\ETX\DC2\ETXy\SUB\ESC\n\
     \\DC3\n\
-    \\STX\EOT\SO\DC2\EOT{\NUL}\SOH\"\a Empty\n\
+    \\STX\EOT\SO\DC2\EOT|\NUL~\SOH\"\a Empty\n\
     \\n\
     \\n\
     \\n\
-    \\ETX\EOT\SO\SOH\DC2\ETX{\b\NAKb\ACKproto3"
+    \\ETX\EOT\SO\SOH\DC2\ETX|\b\NAKb\ACKproto3"

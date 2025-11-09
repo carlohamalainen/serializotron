@@ -352,6 +352,9 @@ data TypeInfo = TypeInfo
 
     -- | Type parameters (e.g., for "Model t v" applied to concrete types like "Model CartesianTupleSystem Arithmetic")
   , _tiTypeParameters :: [TypeInfo]
+
+    -- | For newtypes: TypeInfo of the wrapped type
+  , _tiNewtypeWrapper :: Maybe TypeInfo
   }
   deriving stock (Generic, Show, Eq, Ord)
 
@@ -359,7 +362,7 @@ makeLenses ''TypeInfo
 makeLenses ''FieldInfo
 
 emptyTypeInfo :: TypeInfo
-emptyTypeInfo = TypeInfo Nothing Nothing [] [] Nothing []
+emptyTypeInfo = TypeInfo Nothing Nothing [] [] Nothing [] Nothing
 
 assignFieldLabels :: [FieldInfo] -> [FieldInfo]
 assignFieldLabels fields = zipWith assign [1 :: Int ..] fields
@@ -415,6 +418,7 @@ typeInfoForRep rep =
         , _tiModule = Just moduleText
         , _tiStructure = structureForTypeRep rep
         , _tiTypeParameters = typeParams
+        , _tiNewtypeWrapper = Nothing  -- Explicit for clarity
         }
 
 structureForTypeRep :: TypeRep -> Maybe TypeStructure
@@ -1379,6 +1383,29 @@ instance (GCollectProductValues f) => GCollectProductValues (M1 i c f) where
 instance (ToSZT a) => GCollectProductValues (K1 i a) where
   gCollectProductValues (K1 x) = [toSzt x]
 
+-- | Extract wrapped type info from a newtype's Generic representation
+-- This traverses through M1/C1/S1 wrappers to find the K1 containing the actual type
+class GExtractNewtypeWrapper f where
+  gExtractNewtypeWrapper :: Proxy (f p) -> Maybe TypeInfo
+
+-- For K1, extract TypeInfo using Typeable
+instance Typeable a => GExtractNewtypeWrapper (K1 i a) where
+  gExtractNewtypeWrapper _ = Just $ typeInfoForRep (typeRep (Proxy @a))
+
+-- For metadata wrappers, recurse
+instance GExtractNewtypeWrapper f => GExtractNewtypeWrapper (M1 i c f) where
+  gExtractNewtypeWrapper _ = gExtractNewtypeWrapper (Proxy :: Proxy (f p))
+
+-- For products and sums, we can't extract (shouldn't happen in newtypes anyway)
+instance GExtractNewtypeWrapper (f :*: g) where
+  gExtractNewtypeWrapper _ = Nothing
+
+instance GExtractNewtypeWrapper (f :+: g) where
+  gExtractNewtypeWrapper _ = Nothing
+
+instance GExtractNewtypeWrapper U1 where
+  gExtractNewtypeWrapper _ = Nothing
+
 -- | Generic type info extraction
 class GGetTypeInfo f where
   gGetTypeInfo :: f p -> TypeRep -> TypeInfo
@@ -1441,6 +1468,7 @@ instance ToSZT Int where
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTInt)
               , _tiTypeParameters = []
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1459,6 +1487,7 @@ instance ToSZT Double where
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTDouble)
               , _tiTypeParameters = []
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1477,6 +1506,7 @@ instance ToSZT Text where
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTText)
               , _tiTypeParameters = []
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1495,6 +1525,7 @@ instance ToSZT Bool where
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTBool)
               , _tiTypeParameters = []
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1513,6 +1544,7 @@ instance ToSZT ByteString where
               , _tiFieldLabels = []
               , _tiStructure = Just (TSPrimitive PTBytes)
               , _tiTypeParameters = []
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1531,6 +1563,7 @@ instance (ToSZT a) => ToSZT [a] where
               , _tiFieldLabels = []
               , _tiStructure = Just (TSList elementTypeInfo)
               , _tiTypeParameters = [elementTypeInfo]
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -1543,7 +1576,7 @@ instance (ToSZT a) => ToSZT [a] where
           _ -> emptyTypeInfo
 
 -- Generic type info instances
-instance (Datatype d, GGetConstructorNames f, GGetStructure f, GGetAllConstructorNames f, GGetCompleteStructure f, GGetFieldInfos f, GGetTypeInfo f) => GGetTypeInfo (M1 D d f) where
+instance (Datatype d, GGetConstructorNames f, GGetStructure f, GGetAllConstructorNames f, GGetCompleteStructure f, GGetFieldInfos f, GGetTypeInfo f, GExtractNewtypeWrapper f) => GGetTypeInfo (M1 D d f) where
   gGetTypeInfo (M1 x) tr =
     let inner = gGetTypeInfo x tr
         constructors = gGetAllConstructorNames (Proxy :: Proxy (f p))
@@ -1553,12 +1586,18 @@ instance (Datatype d, GGetConstructorNames f, GGetStructure f, GGetAllConstructo
             then Just (gGetCompleteStructure (Proxy :: Proxy (f p)))
             else inner ^. tiStructure
         fieldLabels = if isSumType then [] else inner ^. tiFieldLabels
+        -- For single-constructor types, try to extract wrapped type
+        -- This works for both newtypes and single-field data types
+        wrappedType = if length constructors == 1
+                      then gExtractNewtypeWrapper (Proxy :: Proxy (f p))
+                      else Nothing
      in inner
           { _tiTypeName     = Just $ Text.pack (datatypeName (undefined :: M1 D d f p))
           , _tiModule       = Just $ Text.pack (moduleName   (undefined :: M1 D d f p))
           , _tiConstructors = constructors
           , _tiFieldLabels  = fieldLabels
           , _tiStructure    = fullStructure
+          , _tiNewtypeWrapper = wrappedType
           }
 instance (GGetTypeInfo f) => GGetTypeInfo (M1 C c f) where
   gGetTypeInfo (M1 x) = gGetTypeInfo x
@@ -1584,6 +1623,7 @@ instance (GGetTypeInfo f, GGetTypeInfo g, GGetFieldInfos f, GGetFieldInfos g) =>
           , _tiFieldLabels = labels
           , _tiStructure = Just $ TSProduct labeledFields
           , _tiTypeParameters = []     -- Products don't have type parameters at this level
+          , _tiNewtypeWrapper = Nothing
           }
 instance (GGetTypeInfo f, GGetTypeInfo g) => GGetTypeInfo (f :+: g) where
   gGetTypeInfo (L1 x) tr = gGetTypeInfo x tr
@@ -2306,6 +2346,7 @@ instance (ToSZT a, ToSZT b) => ToSZT (a, b) where
               , _tiFieldLabels = []
               , _tiStructure = Nothing -- Simplified
               , _tiTypeParameters = []
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -2333,6 +2374,7 @@ instance (ToSZT a, ToSZT b, ToSZT c) => ToSZT (a, b, c) where
               , _tiFieldLabels = []
               , _tiStructure = Nothing
               , _tiTypeParameters = []
+              , _tiNewtypeWrapper = Nothing
               }
       , _dvSchemaVersion = currentSchemaVersion
       , _dvShallowId = Nothing
@@ -2358,6 +2400,7 @@ instance (ToSZT a, ToSZT b, ToSZT c, ToSZT d) => ToSZT (a, b, c, d) where
               , _tiFieldLabels = []
         , _tiStructure = Nothing
         , _tiTypeParameters = []
+        , _tiNewtypeWrapper = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -2400,6 +2443,7 @@ mergeTypeInfo ti1 ti2 = TypeInfo
   , _tiFieldLabels = if null (ti1 ^. tiFieldLabels) then ti2 ^. tiFieldLabels else ti1 ^. tiFieldLabels
   , _tiStructure = ti1 ^. tiStructure <|> ti2 ^. tiStructure
   , _tiTypeParameters = if null (ti1 ^. tiTypeParameters) then ti2 ^. tiTypeParameters else ti1 ^. tiTypeParameters
+  , _tiNewtypeWrapper = ti1 ^. tiNewtypeWrapper <|> ti2 ^. tiNewtypeWrapper
   }
 
 -- | Intern a TypeInfo, recursively interning all nested TypeInfo structures.
@@ -2570,14 +2614,17 @@ toProtoPrimitiveValue = \case
   PBytes bs -> defMessage Lens.& Proto.bytesVal Lens..~ bs
 
 toProtoTypeInfo :: TypeInfo -> Proto.TypeInfo
-toProtoTypeInfo (TypeInfo name mod cons fieldLabels struct typeParams) =
-  defMessage
-    Lens.& Proto.typeName Lens..~ fromMaybe "" name
-    Lens.& Proto.moduleName Lens..~ fromMaybe "" mod
-    Lens.& Proto.constructors Lens..~ cons
-    Lens.& Proto.fieldLabels Lens..~ fieldLabels
-    Lens.& Proto.structure Lens..~ maybe defMessage toProtoTypeStructure struct
-    Lens.& Proto.typeParameters Lens..~ map toProtoTypeInfo typeParams
+toProtoTypeInfo (TypeInfo name mod cons fieldLabels struct typeParams newtypeWrap) =
+  let base = defMessage
+        Lens.& Proto.typeName Lens..~ fromMaybe "" name
+        Lens.& Proto.moduleName Lens..~ fromMaybe "" mod
+        Lens.& Proto.constructors Lens..~ cons
+        Lens.& Proto.fieldLabels Lens..~ fieldLabels
+        Lens.& Proto.structure Lens..~ maybe defMessage toProtoTypeStructure struct
+        Lens.& Proto.typeParameters Lens..~ map toProtoTypeInfo typeParams
+   in case newtypeWrap of
+        Nothing -> base
+        Just wrapInfo -> base Lens.& Proto.newtypeWrapper Lens..~ toProtoTypeInfo wrapInfo
 
 toProtoTypeStructure :: TypeStructure -> Proto.TypeStructure
 toProtoTypeStructure = \case
@@ -2731,6 +2778,11 @@ fromProtoTypeInfo protoTI = do
       then return Nothing
       else Just <$> fromProtoTypeStructure (protoTI Lens.^. Proto.structure)
   typeParams <- traverse fromProtoTypeInfo (protoTI Lens.^. Proto.typeParameters)
+  -- Parse newtype wrapper if present
+  newtypeWrap <-
+    if protoTI Lens.^. Proto.newtypeWrapper == defMessage
+      then return Nothing
+      else Just <$> fromProtoTypeInfo (protoTI Lens.^. Proto.newtypeWrapper)
   let info =
         TypeInfo
           (if Text.null (protoTI Lens.^. Proto.typeName) then Nothing else Just (protoTI Lens.^. Proto.typeName))
@@ -2739,6 +2791,7 @@ fromProtoTypeInfo protoTI = do
           (protoTI Lens.^. Proto.fieldLabels)
           struct
           typeParams
+          newtypeWrap
   normalizeTypeInfo info
 fromProtoTypeStructure :: Proto.TypeStructure -> Either SerializotronError TypeStructure
 fromProtoTypeStructure protoTS =
@@ -3421,6 +3474,7 @@ extractTypeInfo (SomeTypeMetadata (_ :: Proxy a)) =
         , _tiFieldLabels = []  -- Will be filled in by recursive interning when structure is encountered
         , _tiStructure = Just $ gGetCompleteStructure (Proxy @(Rep a ()))
         , _tiTypeParameters = typeParams
+        , _tiNewtypeWrapper = Nothing  -- Will be populated by Generic derivation if applicable
         }
 
 -- | Save type metadata to an .szt file without needing actual values.

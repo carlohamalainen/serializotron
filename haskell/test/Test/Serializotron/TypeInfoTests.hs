@@ -66,6 +66,35 @@ data Color = Red | Green | Blue
 instance ToSZT Color
 instance FromSZT Color
 
+-- Newtype wrappers for testing newtype wrapper tracking
+newtype UserId = UserId Int
+  deriving stock (Generic, Eq, Show)
+
+instance ToSZT UserId
+instance FromSZT UserId
+
+newtype UserName = UserName Text
+  deriving stock (Generic, Eq, Show)
+
+instance ToSZT UserName
+instance FromSZT UserName
+
+-- Chained newtypes: WrapperId wraps UserId which wraps Int
+newtype WrapperId = WrapperId UserId
+  deriving stock (Generic, Eq, Show)
+
+instance ToSZT WrapperId
+instance FromSZT WrapperId
+
+-- Product type containing newtypes
+data User = User
+  { userId :: UserId
+  , userName :: UserName
+  } deriving stock (Generic, Eq, Show)
+
+instance ToSZT User
+instance FromSZT User
+
 --------------------------------------------------------------------------------
 -- Generators
 --------------------------------------------------------------------------------
@@ -100,6 +129,18 @@ genShape = Gen.choice
 
 genColor :: Gen Color
 genColor = Gen.choice [pure Red, pure Green, pure Blue]
+
+genUserId :: Gen UserId
+genUserId = UserId <$> Gen.int (Range.linear 1 100000)
+
+genUserName :: Gen UserName
+genUserName = UserName <$> genText
+
+genWrapperId :: Gen WrapperId
+genWrapperId = WrapperId <$> genUserId
+
+genUser :: Gen User
+genUser = User <$> genUserId <*> genUserName
 
 --------------------------------------------------------------------------------
 -- TypeInfo Extraction Tests
@@ -247,6 +288,177 @@ prop_color_typeinfo_consistency = property $ do
       green ^. tiTypeName === blue ^. tiTypeName
       red ^. tiTypeName === Just "Color"
     _ -> failure
+
+--------------------------------------------------------------------------------
+-- Newtype Wrapper Tests
+--------------------------------------------------------------------------------
+
+-- | Test that UserId newtype captures wrapped type info
+prop_userid_newtype_wrapper :: Property
+prop_userid_newtype_wrapper = property $ do
+  userId <- forAll genUserId
+  let dynVal = toSzt userId
+  case dynVal ^. dvTypeInfo of
+    Just typeInfo -> do
+      annotate $ "TypeInfo: " ++ show typeInfo
+      typeInfo ^. tiTypeName === Just "UserId"
+      typeInfo ^. tiModule === Just "Test.Serializotron.TypeInfoTests"
+      typeInfo ^. tiConstructors === ["UserId"]
+
+      -- Check that newtype wrapper is captured
+      case typeInfo ^. tiNewtypeWrapper of
+        Just wrapperInfo -> do
+          annotate $ "Wrapper TypeInfo: " ++ show wrapperInfo
+          -- Should wrap Int
+          wrapperInfo ^. tiTypeName === Just "Int"
+          wrapperInfo ^. tiModule === Just "GHC.Types"
+        Nothing -> do
+          annotate "Expected newtype wrapper info but got Nothing"
+          failure
+    Nothing -> do
+      annotate "No type info found"
+      failure
+
+-- | Test that UserName newtype captures wrapped Text type
+prop_username_newtype_wrapper :: Property
+prop_username_newtype_wrapper = property $ do
+  userName <- forAll genUserName
+  let dynVal = toSzt userName
+  case dynVal ^. dvTypeInfo of
+    Just typeInfo -> do
+      typeInfo ^. tiTypeName === Just "UserName"
+      typeInfo ^. tiConstructors === ["UserName"]
+
+      -- Check wrapper captures Text
+      case typeInfo ^. tiNewtypeWrapper of
+        Just wrapperInfo -> do
+          wrapperInfo ^. tiTypeName === Just "Text"
+          -- Note: actual module is Data.Text.Internal
+          wrapperInfo ^. tiModule === Just "Data.Text.Internal"
+        Nothing -> failure
+    Nothing -> failure
+
+-- | Test chained newtype wrappers (WrapperId -> UserId)
+-- Note: Currently only captures one level deep due to Typeable limitation.
+-- The wrapped type (UserId) is extracted via Typeable which doesn't include
+-- Generic derivation info, so it won't have its own wrapper info populated.
+prop_chained_newtype_wrapper :: Property
+prop_chained_newtype_wrapper = property $ do
+  wrapperId <- forAll genWrapperId
+  let dynVal = toSzt wrapperId
+  case dynVal ^. dvTypeInfo of
+    Just typeInfo -> do
+      annotate $ "TypeInfo: " ++ show typeInfo
+      typeInfo ^. tiTypeName === Just "WrapperId"
+      typeInfo ^. tiConstructors === ["WrapperId"]
+
+      -- First level: should wrap UserId
+      case typeInfo ^. tiNewtypeWrapper of
+        Just level1 -> do
+          annotate $ "Level 1 wrapper: " ++ show level1
+          level1 ^. tiTypeName === Just "UserId"
+
+          -- Note: UserId's own wrapper (Int) is not captured because
+          -- the wrapper type is extracted via Typeable, not Generic.
+          -- This is a known limitation - to get full chain info, each
+          -- type needs to be serialized with its ToSZT instance.
+          level1 ^. tiNewtypeWrapper === Nothing
+        Nothing -> do
+          annotate "Expected first level wrapper (UserId) but got Nothing"
+          failure
+    Nothing -> failure
+
+-- | Test that product type containing newtypes preserves wrapper info in fields
+prop_user_product_with_newtypes :: Property
+prop_user_product_with_newtypes = property $ do
+  user <- forAll genUser
+  let dynVal = toSzt user
+  case dynVal ^. dvTypeInfo of
+    Just typeInfo -> do
+      annotate $ "User TypeInfo: " ++ show typeInfo
+      typeInfo ^. tiTypeName === Just "User"
+      typeInfo ^. tiConstructors === ["User"]
+
+      -- Check that structure contains fields with newtype info
+      case typeInfo ^. tiStructure of
+        Just (TSProduct fields) -> do
+          annotate $ "Product has " ++ show (length fields) ++ " fields"
+          length fields === 2
+
+          -- Check that field types have wrapper info
+          -- Note: The field types should still be UserId and UserName
+          case fields of
+            [field1, field2] -> do
+              let fieldType1 = field1 ^. fiFieldType
+              let fieldType2 = field2 ^. fiFieldType
+
+              annotate $ "Field 1 type: " ++ show fieldType1
+              annotate $ "Field 2 type: " ++ show fieldType2
+
+              -- First field should be UserId with wrapper
+              fieldType1 ^. tiTypeName === Just "UserId"
+              case fieldType1 ^. tiNewtypeWrapper of
+                Just wrapper1 -> wrapper1 ^. tiTypeName === Just "Int"
+                Nothing -> do
+                  annotate "Expected UserId to have wrapper info"
+                  failure
+
+              -- Second field should be UserName with wrapper
+              fieldType2 ^. tiTypeName === Just "UserName"
+              case fieldType2 ^. tiNewtypeWrapper of
+                Just wrapper2 -> do
+                  wrapper2 ^. tiTypeName === Just "Text"
+                  -- Module is Data.Text.Internal
+                  wrapper2 ^. tiModule === Just "Data.Text.Internal"
+                Nothing -> do
+                  annotate "Expected UserName to have wrapper info"
+                  failure
+            _ -> failure
+        _ -> do
+          annotate "Expected TSProduct structure"
+          failure
+    Nothing -> failure
+
+-- | Test that newtype wrappers don't affect round-trip serialization
+prop_newtype_roundtrip_userid :: Property
+prop_newtype_roundtrip_userid = property $ do
+  userId <- forAll genUserId
+  let encoded = toSzt userId
+  case fromSzt encoded of
+    Left err -> do
+      annotate $ "Failed to decode: " ++ show err
+      failure
+    Right decoded -> userId === decoded
+
+prop_newtype_roundtrip_username :: Property
+prop_newtype_roundtrip_username = property $ do
+  userName <- forAll genUserName
+  let encoded = toSzt userName
+  case fromSzt encoded of
+    Left err -> do
+      annotate $ "Failed to decode: " ++ show err
+      failure
+    Right decoded -> userName === decoded
+
+prop_newtype_roundtrip_chained :: Property
+prop_newtype_roundtrip_chained = property $ do
+  wrapperId <- forAll genWrapperId
+  let encoded = toSzt wrapperId
+  case fromSzt encoded of
+    Left err -> do
+      annotate $ "Failed to decode: " ++ show err
+      failure
+    Right decoded -> wrapperId === decoded
+
+prop_newtype_roundtrip_user :: Property
+prop_newtype_roundtrip_user = property $ do
+  user <- forAll genUser
+  let encoded = toSzt user
+  case fromSzt encoded of
+    Left err -> do
+      annotate $ "Failed to decode: " ++ show err
+      failure
+    Right decoded -> user === decoded
 
 --------------------------------------------------------------------------------
 -- Round-trip Tests

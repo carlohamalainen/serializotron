@@ -140,4 +140,13 @@ typeInfoTests = testGroup "TypeInfo Extraction Tests"
   , testProperty "employee_roundtrip" prop_employee_roundtrip
   , testProperty "shape_roundtrip" prop_shape_roundtrip
   , testProperty "color_roundtrip" prop_color_roundtrip
+  -- Newtype wrapper tests
+  , testProperty "userid_newtype_wrapper" prop_userid_newtype_wrapper
+  , testProperty "username_newtype_wrapper" prop_username_newtype_wrapper
+  , testProperty "chained_newtype_wrapper" prop_chained_newtype_wrapper
+  , testProperty "user_product_with_newtypes" prop_user_product_with_newtypes
+  , testProperty "newtype_roundtrip_userid" prop_newtype_roundtrip_userid
+  , testProperty "newtype_roundtrip_username" prop_newtype_roundtrip_username
+  , testProperty "newtype_roundtrip_chained" prop_newtype_roundtrip_chained
+  , testProperty "newtype_roundtrip_user" prop_newtype_roundtrip_user
   ]

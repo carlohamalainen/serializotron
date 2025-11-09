@@ -49,6 +49,7 @@ instance ToSZT () where
         , _tiFieldLabels = []
         , _tiStructure = Just TSUnit
         , _tiTypeParameters = []
+        , _tiNewtypeWrapper = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -92,6 +93,7 @@ instance ToSZT Int32 where
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTInt32)
         , _tiTypeParameters = []
+        , _tiNewtypeWrapper = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -140,6 +142,7 @@ instance ToSZT Word32 where
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTWord32)
         , _tiTypeParameters = []
+        , _tiNewtypeWrapper = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -159,6 +162,7 @@ instance ToSZT Word64 where
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTWord64)
         , _tiTypeParameters = []
+        , _tiNewtypeWrapper = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing
@@ -179,6 +183,7 @@ instance ToSZT Integer where
         , _tiFieldLabels = []
         , _tiStructure = Just (TSPrimitive PTInteger)
         , _tiTypeParameters = []
+        , _tiNewtypeWrapper = Nothing
         }
     , _dvSchemaVersion = currentSchemaVersion
     , _dvShallowId = Nothing

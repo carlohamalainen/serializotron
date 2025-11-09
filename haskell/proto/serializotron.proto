@@ -80,6 +80,7 @@ message TypeInfo {
   repeated string field_labels = 4;   // Record field names in order
   TypeStructure structure = 5;
   repeated TypeInfo type_parameters = 6;  // Type parameters (e.g., for "Model t v" applied to concrete types)
+  TypeInfo newtype_wrapper = 7;  // For newtypes: the wrapped type (e.g., UserId wraps Text)
 }
 
 message TypeStructure {

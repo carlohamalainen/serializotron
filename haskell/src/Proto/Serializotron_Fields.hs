@@ -195,6 +195,13 @@ maybe'list ::
    Data.ProtoLens.Field.HasField s "maybe'list" a) =>
   Lens.Family2.LensLike' f s a
 maybe'list = Data.ProtoLens.Field.field @"maybe'list"
+maybe'newtypeWrapper ::
+  forall f s a.
+  (Prelude.Functor f,
+   Data.ProtoLens.Field.HasField s "maybe'newtypeWrapper" a) =>
+  Lens.Family2.LensLike' f s a
+maybe'newtypeWrapper
+  = Data.ProtoLens.Field.field @"maybe'newtypeWrapper"
 maybe'primitive ::
   forall f s a.
   (Prelude.Functor f,
@@ -267,6 +274,12 @@ moduleName ::
    Data.ProtoLens.Field.HasField s "moduleName" a) =>
   Lens.Family2.LensLike' f s a
 moduleName = Data.ProtoLens.Field.field @"moduleName"
+newtypeWrapper ::
+  forall f s a.
+  (Prelude.Functor f,
+   Data.ProtoLens.Field.HasField s "newtypeWrapper" a) =>
+  Lens.Family2.LensLike' f s a
+newtypeWrapper = Data.ProtoLens.Field.field @"newtypeWrapper"
 primitive ::
   forall f s a.
   (Prelude.Functor f,
