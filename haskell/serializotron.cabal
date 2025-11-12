@@ -68,7 +68,7 @@ library
                       Proto.Serializotron
                       Proto.Serializotron_Fields
 
-    build-depends:    base ^>= 4.18.3.0,
+    build-depends:    base,
                       aeson,
                       bytestring,
                       containers,
@@ -98,7 +98,7 @@ test-suite serializotron-test
     hs-source-dirs:   test
     main-is:          Main.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         bytestring,
         containers,
         directory,
@@ -129,7 +129,7 @@ executable szt
     hs-source-dirs:   app
     main-is:          Szt.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         bytestring,
         serializotron,
         text,
@@ -142,7 +142,7 @@ executable generate-samples
     hs-source-dirs:   app
     main-is:          GenerateSamples.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         aeson,
         bytestring,
         serializotron,
@@ -162,7 +162,7 @@ executable small-examples
     hs-source-dirs:   app
     main-is:          SmallExamples.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         pretty-simple,
         serializotron,
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -172,7 +172,7 @@ executable save-foo
     hs-source-dirs:   app
     main-is:          SaveFoo.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         serializotron,
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
 
@@ -181,7 +181,7 @@ executable load-foo
     hs-source-dirs:   app
     main-is:          LoadFoo.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         serializotron,
         text,
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -191,7 +191,7 @@ executable load-foo-correct
     hs-source-dirs:   app
     main-is:          LoadFooCorrect.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         serializotron,
         text,
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -201,6 +201,6 @@ executable gadt-example
     hs-source-dirs:   app
     main-is:          GADTExample.hs
     build-depends:
-        base ^>= 4.18.3.0,
+        base,
         serializotron,
     ghc-options: -threaded -rtsopts -with-rtsopts=-N
