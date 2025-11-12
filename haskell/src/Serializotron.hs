@@ -10,6 +10,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Eta reduce" #-}
+{-# HLINT ignore "Redundant return" #-}
 
 -- |
 -- Module: Serializotron
@@ -1187,7 +1188,7 @@ deduplicateValueShallowWithStats strat rootValue
                       (computeFastApproximateHash dynVal, False)
 
               -- Record hashing if we had to do approximate hash (no shallow ID)
-              when (not hasShallowId) $
+              unless hasShallowId $
                 fastStats . typeHashed %= Map.insertWith (+) typeName 1
 
               seen <- use $ fastSeenHashes . at shallowHash
@@ -2474,19 +2475,21 @@ internTypeInfo (Just ti) = do
   -- Use (module, name) as the key for deduplication
   let nameKey = (ti ^. tiModule, ti ^. tiTypeName)
 
-  -- Skip anonymous types (no name)
   case nameKey of
+    -- Skip anonymous types (no name)
     (_, Nothing) -> pure Nothing
+
+    -- FIXME this is dodgy, unused variables, etc.
     _ -> do
       TypeInfoPool nextId byName shared <- get
       case Map.lookup nameKey byName of
         Just existingId -> do
           -- Already have a TypeInfo with this name - merge them
-          let existingProto = shared Map.! existingId
+          let _existingProto = shared Map.! existingId
           -- The existing proto has the structure we serialized before
           -- We want to keep the better version (more complete)
           -- For now, we'll update with the merged version
-          let mergedTi = mergeTypeInfo ti (error "Cannot convert back from proto - using new ti")
+          let _mergedTi = mergeTypeInfo ti (error "Cannot convert back from proto - using new ti")
               -- Since we can't easily convert proto back to TypeInfo,
               -- we'll just use the new one if it has structure, otherwise keep existing
           if isNothing (ti ^. tiStructure)
@@ -3383,7 +3386,7 @@ loadSzt path = do
                     Right sztFile -> do
                       let schemaVersion = sztFile Lens.^. Proto.schemaVersion
                       let protoSharedTypes = sztFile Lens.^. Proto.sharedTypeInfo
-                      case Map.traverseWithKey (\_ -> fromProtoTypeInfo) protoSharedTypes of
+                      case Map.traverseWithKey (const fromProtoTypeInfo) protoSharedTypes of
                         Left err -> return $ Left err
                         Right sharedTypeMap -> do
                           let protoSharedValues = sztFile Lens.^. Proto.sharedValues
@@ -3394,7 +3397,7 @@ loadSzt path = do
                               case resolveReferences sharedTable dynValue of
                                 Left err -> return $ Left err
                                 Right resolvedValue ->
-                                  return $ first (\sztErr -> DeserializationError sztErr emptyContext) (fromSzt resolvedValue)
+                                  return $ first (`DeserializationError` emptyContext) (fromSzt resolvedValue)
 
 -- | Load the raw internal representation from a .szt file (for debugging).
 --
@@ -3425,7 +3428,7 @@ loadSztRaw path = do
         Right sztFile -> do
           let schemaVersion = sztFile Lens.^. Proto.schemaVersion
           let protoSharedTypes = sztFile Lens.^. Proto.sharedTypeInfo
-          case Map.traverseWithKey (\_ -> fromProtoTypeInfo) protoSharedTypes of
+          case Map.traverseWithKey (const fromProtoTypeInfo) protoSharedTypes of
             Left err -> return $ Left err
             Right sharedTypeMap -> do
               let protoSharedValues = sztFile Lens.^. Proto.sharedValues
